@@ -1,0 +1,7 @@
+- id: ctxdiet
+  name: ctxdiet context budget
+  description: Fail the commit if AI-agent context exceeds the token budget.
+  entry: ctxdiet
+  language: node
+  pass_filenames: false
+  # Set your budget in .pre-commit-config.yaml, e.g. args: ["--max-tokens", "8000"]

@@ -14,6 +14,8 @@ export interface ResolvedOptions {
   model: Model;
   /** True when the model was auto-detected from Claude config, not passed in. */
   modelDetected: boolean;
+  /** CI budget: exit non-zero if baseline context exceeds this. null = off. */
+  maxTokens: number | null;
   json: boolean;
   dryRun: boolean;
   yes: boolean;
@@ -46,10 +48,19 @@ export interface DetectedAgent {
   label: string;
 }
 
+/** A reworded-duplicate rule pair flagged for manual merge (never auto-changed). */
+export interface Overlap {
+  agent: string;
+  file: string;
+  a: string;
+  b: string;
+}
+
 export interface ScanResult {
   options: ResolvedOptions;
   detectedAgents: DetectedAgent[];
   findings: Finding[];
+  overlaps: Overlap[];
   /** Full persistent context estimate (drives the before/after total row). */
   baselineTokens: number;
   /** HIGH-confidence savings only — the green headline and the grade. */

@@ -1,0 +1,21 @@
+name: "ctxdiet"
+description: "Fail the build if your AI coding-agent context exceeds a token budget."
+branding:
+  icon: "scissors"
+  color: "green"
+inputs:
+  path:
+    description: "Directory to scan"
+    required: false
+    default: "."
+  max-tokens:
+    description: "Fail if context exceeds this many tokens"
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - shell: bash
+      env:
+        CTXDIET_PATH: ${{ inputs.path }}
+        CTXDIET_MAX: ${{ inputs.max-tokens }}
+      run: npx ctxdiet@latest --path "$CTXDIET_PATH" --max-tokens "$CTXDIET_MAX"

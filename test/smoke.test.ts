@@ -19,6 +19,7 @@ function options(over: Partial<ResolvedOptions>): ResolvedOptions {
     sessionsPerMonth: 100,
     model: "sonnet",
     modelDetected: false,
+    maxTokens: null,
     json: true,
     dryRun: false,
     yes: false,

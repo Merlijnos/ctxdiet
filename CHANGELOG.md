@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented here.
 
+## [0.2.0]
+
+- **Accurate token counts.** Text files are now measured with a real BPE tokenizer
+  (`gpt-tokenizer`, pure-JS, offline) instead of chars/4. Heavy directories still use a
+  bounded byte estimate. No exact offline Claude tokenizer exists; the GPT-4 encoding is
+  used as a close cross-model proxy.
+- **CI budget gate.** `--max-tokens <n>` exits non-zero when context exceeds the budget —
+  for pre-commit hooks and PR checks.
+- **GitHub Action** (`action.yml`) and a **pre-commit hook** (`.pre-commit-hooks.yaml`).
+- **Possible-duplicate detection.** Flags reworded near-duplicate rule lines (lexical
+  overlap, offline) for manual merge — never auto-changed.
+- Reframed around agent reasoning quality, not just cost.
+
 ## [0.1.1]
 
 - Clearer scan output: problems show *what* and *why* per row; a clean setup says so
