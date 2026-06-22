@@ -3,7 +3,7 @@ import Table from "cli-table3";
 
 import { monthlyCost } from "./pricing";
 import { shortenPath } from "./sources";
-import { Finding, ResolvedOptions, ScanResult } from "./types";
+import { Finding, Overlap, ResolvedOptions, ScanResult } from "./types";
 
 const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
 const usd = (n: number) => `$${n.toFixed(2)}`;
@@ -27,7 +27,8 @@ function methodNote(o: ResolvedOptions): void {
   console.log();
   console.log(
     chalk.dim(
-      `Estimate: chars/4 at ${o.model} pricing${modelNote}, ${o.sessionsPerMonth} sessions/month.`
+      `Counts: GPT-4 tokenizer for files, size estimate for dirs (offline). ` +
+        `Pricing: ${o.model}${modelNote}, ${o.sessionsPerMonth} sessions/month.`
     )
   );
   console.log();
@@ -54,6 +55,23 @@ function printReview(r: ScanResult, low: Finding[], o: ResolvedOptions): void {
         `(~${dollars(r.lowConfidencePotential, o)}/month) if you disable what you don't need.`
     )
   );
+}
+
+function printOverlaps(overlaps: Overlap[]): void {
+  console.log();
+  console.log(chalk.cyan.bold("Possible duplicate rules — consider merging"));
+  console.log(
+    chalk.dim("Reworded near-duplicates. ctxdiet won't merge these — your call.")
+  );
+  let lastFile = "";
+  for (const ov of overlaps) {
+    if (ov.file !== lastFile) {
+      console.log("  " + chalk.bold(ov.file));
+      lastFile = ov.file;
+    }
+    console.log("    " + chalk.dim("- ") + ov.a);
+    console.log("    " + chalk.dim("- ") + ov.b);
+  }
 }
 
 export function printScanResult(r: ScanResult, o: ResolvedOptions): void {
@@ -92,14 +110,15 @@ export function printScanResult(r: ScanResult, o: ResolvedOptions): void {
   // Clean: nothing auto-fixable. Say so plainly instead of an empty table.
   if (high.length === 0) {
     console.log();
-    if (low.length === 0) {
+    if (low.length === 0 && r.overlaps.length === 0) {
       console.log(chalk.green("Nothing to fix — your agent config is already lean."));
     } else {
       console.log(
         chalk.green("No auto-fixable waste.") +
-          chalk.dim(" A few items below are worth a look.")
+          chalk.dim(" A few things below are worth a look.")
       );
-      printReview(r, low, o);
+      if (low.length > 0) printReview(r, low, o);
+      if (r.overlaps.length > 0) printOverlaps(r.overlaps);
     }
     methodNote(o);
     return;
@@ -135,6 +154,7 @@ export function printScanResult(r: ScanResult, o: ResolvedOptions): void {
   );
 
   if (low.length > 0) printReview(r, low, o);
+  if (r.overlaps.length > 0) printOverlaps(r.overlaps);
   methodNote(o);
 }
 
@@ -198,7 +218,7 @@ export function toJson(r: ScanResult) {
     path: options.path,
     model: options.model,
     sessionsPerMonth: options.sessionsPerMonth,
-    method: "chars/4 heuristic — estimate only; usage history not analyzed",
+    method: "GPT-4 tokenizer for files, size estimate for dirs — offline; not a billing figure",
     detectedAgents: r.detectedAgents,
     grade: r.grade,
     baselineTokens: r.baselineTokens,

@@ -57,13 +57,41 @@ Auto-detected; only the ones you use are scanned.
 - **Leaves alone** anything whose usage it can't verify (MCP servers, real skills) — listed
   for review, never auto-removed.
 
-Token counts use a `chars / 4` estimate (no tokenizer, no network) — good enough to rank
-what to cut, not a billing figure.
+It also flags **reworded near-duplicate rules** for you to merge (lexical, offline — it
+won't touch them).
+
+Token counts use a real BPE tokenizer (`gpt-tokenizer`, offline) for text files and a
+size estimate for directories. There's no exact offline Claude tokenizer, so the GPT-4
+encoding is used as a close cross-model proxy — good for ranking what to cut, not a
+billing figure.
+
+## Keep it lean in CI
+
+Fail a build or commit when context drifts past a budget:
+
+```yaml
+# .github/workflows/ctxdiet.yml
+- uses: Merlijnos/ctxdiet@v0.2.0
+  with:
+    max-tokens: 8000
+```
+
+```yaml
+# .pre-commit-config.yaml
+- repo: https://github.com/Merlijnos/ctxdiet
+  rev: v0.2.0
+  hooks:
+    - id: ctxdiet
+      args: ["--max-tokens", "8000"]
+```
+
+Or directly: `npx ctxdiet --max-tokens 8000` (exits non-zero when over).
 
 ## Flags
 
 ```
 --path <dir>                directory to scan (default: current)
+--max-tokens <n>            CI budget: exit non-zero if context exceeds n tokens
 --model <opus|sonnet|haiku> pricing for the optional $ estimate (default: sonnet)
 --sessions-per-month <n>    default 100
 --dry-run                   show diffs, write nothing

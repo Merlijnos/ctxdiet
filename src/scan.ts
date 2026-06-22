@@ -2,10 +2,11 @@ import path from "node:path";
 
 import { AgentDef, detectAgents } from "./agents";
 import { grade, LARGE_CLAUDEMD_TOKENS, MCP_SERVER_TOKEN_EST } from "./constants";
+import { findOverlaps } from "./overlap";
 import * as src from "./sources";
 import { estimateTokens } from "./tokens";
 import { trimMarkdown } from "./trim";
-import { Finding, ResolvedOptions, ScanResult } from "./types";
+import { Finding, Overlap, ResolvedOptions, ScanResult } from "./types";
 
 interface HeavyPath {
   name: string;
@@ -29,13 +30,14 @@ function presentHeavyPaths(o: ResolvedOptions): HeavyPath[] {
  */
 export function scan(o: ResolvedOptions): ScanResult {
   const findings: Finding[] = [];
+  const overlaps: Overlap[] = [];
   let baselineTokens = 0;
 
   const agents = detectAgents(o);
   const heavy = presentHeavyPaths(o);
 
   for (const agent of agents) {
-    baselineTokens += scanAgent(agent, o, heavy, findings);
+    baselineTokens += scanAgent(agent, o, heavy, findings, overlaps);
   }
 
   const headlineSavings = findings
@@ -49,6 +51,7 @@ export function scan(o: ResolvedOptions): ScanResult {
     options: o,
     detectedAgents: agents.map((a) => ({ id: a.id, label: a.label })),
     findings,
+    overlaps,
     baselineTokens,
     headlineSavings,
     lowConfidencePotential,
@@ -61,7 +64,8 @@ function scanAgent(
   agent: AgentDef,
   o: ResolvedOptions,
   heavy: HeavyPath[],
-  findings: Finding[]
+  findings: Finding[],
+  overlaps: Overlap[]
 ): number {
   let baseline = 0;
 
@@ -98,6 +102,11 @@ function scanAgent(
         fixable: false,
         manualReview: true,
       });
+    }
+
+    // Reworded-duplicate rules — flagged for manual merge, never auto-changed.
+    for (const pair of findOverlaps(original)) {
+      overlaps.push({ agent: agent.label, file: label, a: pair.a, b: pair.b });
     }
   }
 

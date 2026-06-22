@@ -10,7 +10,7 @@ import { scan } from "./scan";
 import { detectModel } from "./sources";
 import { Model, ResolvedOptions } from "./types";
 
-const VERSION = "0.1.1";
+const VERSION = "0.2.0";
 
 /** When launched as `slimclaude`, nudge toward the new name (the old one still works). */
 function renameBannerIfNeeded(): void {
@@ -26,6 +26,7 @@ interface RawOptions {
   path?: string;
   sessionsPerMonth?: string;
   model?: string;
+  maxTokens?: string;
   json?: boolean;
   dryRun?: boolean;
   yes?: boolean;
@@ -52,12 +53,23 @@ function resolveOptions(raw: RawOptions, modelFromCli: boolean): ResolvedOptions
   const parsed = Number.parseInt(raw.sessionsPerMonth ?? "100", 10);
   const sessionsPerMonth = Number.isFinite(parsed) && parsed > 0 ? parsed : 100;
 
+  let maxTokens: number | null = null;
+  if (raw.maxTokens != null) {
+    const n = Number.parseInt(raw.maxTokens, 10);
+    if (!Number.isFinite(n) || n <= 0) {
+      console.error(`Invalid --max-tokens "${raw.maxTokens}". Use a positive integer.`);
+      process.exit(1);
+    }
+    maxTokens = n;
+  }
+
   return {
     path: path.resolve(raw.path ?? process.cwd()),
     home,
     sessionsPerMonth,
     model,
     modelDetected,
+    maxTokens,
     json: Boolean(raw.json),
     dryRun: Boolean(raw.dryRun),
     yes: Boolean(raw.yes),
@@ -69,6 +81,7 @@ function addCommonOptions(cmd: Command): Command {
     .option("--path <dir>", "project directory to scan", process.cwd())
     .option("--sessions-per-month <n>", "sessions/month for cost estimate", "100")
     .option("--model <model>", "pricing model: opus|sonnet|haiku", "sonnet")
+    .option("--max-tokens <n>", "CI budget: exit non-zero if context exceeds n tokens")
     .option("--json", "machine-readable JSON output")
     .option("--dry-run", "show changes but write nothing")
     .option("--yes", "apply all high-confidence fixes without prompting");
@@ -87,6 +100,20 @@ program.action(async () => {
   const o = resolveOptions(program.opts<RawOptions>(), fromCli);
   const result = scan(o);
   printScanResult(result, o);
+
+  // CI budget gate: a check, not an interactive flow.
+  if (o.maxTokens != null) {
+    const used = result.baselineTokens.toLocaleString("en-US");
+    const budget = o.maxTokens.toLocaleString("en-US");
+    if (result.baselineTokens > o.maxTokens) {
+      if (!o.json) {
+        console.error(chalk.red(`✗ over budget: ${used} > ${budget} context tokens`));
+      }
+      process.exit(1);
+    }
+    if (!o.json) console.log(chalk.green(`✓ within budget: ${used} ≤ ${budget} context tokens`));
+    return;
+  }
 
   if (o.json) return;
   const fixable = result.findings.filter(
