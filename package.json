@@ -14,7 +14,12 @@
     "agents-md",
     "mcp",
     "tokens",
+    "token-optimization",
     "context",
+    "context-window",
+    "llm",
+    "ai-agents",
+    "cursorrules",
     "cli",
     "ai"
   ],
