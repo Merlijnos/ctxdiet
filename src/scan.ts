@@ -104,9 +104,9 @@ function scanAgent(
       });
     }
 
-    // Reworded-duplicate rules — flagged for manual merge, never auto-changed.
+    // Reworded-duplicate rules — resolved interactively in `fix`.
     for (const pair of findOverlaps(original)) {
-      overlaps.push({ agent: agent.label, file: label, a: pair.a, b: pair.b });
+      overlaps.push({ agent: agent.label, path: file, a: pair.a, b: pair.b });
     }
   }
 

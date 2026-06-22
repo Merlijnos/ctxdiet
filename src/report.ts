@@ -1,9 +1,9 @@
-import chalk from "chalk";
-import Table from "cli-table3";
+import { log, note } from "@clack/prompts";
+import pc from "picocolors";
 
 import { monthlyCost } from "./pricing";
 import { shortenPath } from "./sources";
-import { Finding, Overlap, ResolvedOptions, ScanResult } from "./types";
+import { Finding, ResolvedOptions, ScanResult } from "./types";
 
 const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
 const usd = (n: number) => `$${n.toFixed(2)}`;
@@ -12,66 +12,10 @@ function dollars(tokens: number, o: ResolvedOptions): string {
   return usd(monthlyCost(tokens, o.sessionsPerMonth, o.model));
 }
 
-function gradeBadge(g: string): string {
-  const paint =
-    g === "A" || g === "B"
-      ? chalk.bgGreen.black
-      : g === "C"
-      ? chalk.bgYellow.black
-      : chalk.bgRed.white;
-  return paint.bold(` ${g} `);
-}
-
-function methodNote(o: ResolvedOptions): void {
-  const modelNote = o.modelDetected ? " (from your Claude config)" : "";
-  console.log();
-  console.log(
-    chalk.dim(
-      `Counts: GPT-4 tokenizer for files, size estimate for dirs (offline). ` +
-        `Pricing: ${o.model}${modelNote}, ${o.sessionsPerMonth} sessions/month.`
-    )
-  );
-  console.log();
-}
-
-function printReview(r: ScanResult, low: Finding[], o: ResolvedOptions): void {
-  console.log();
-  console.log(chalk.yellow.bold("Review — ctxdiet won't change these on its own"));
-  console.log(
-    chalk.dim("They cost tokens every session; only you know if they're still in use.")
-  );
-  const table = new Table({
-    head: ["Agent", "Item", "Est. tokens/session"].map((h) => chalk.dim(h)),
-    colAligns: ["left", "left", "right"],
-    style: { head: [], border: [] },
-  });
-  for (const f of low) {
-    table.push([f.agent, f.title, chalk.yellow(fmt(f.tokensPerSession))]);
-  }
-  console.log(table.toString());
-  console.log(
-    chalk.yellow(
-      `Optional: ~${fmt(r.lowConfidencePotential)} tokens/session ` +
-        `(~${dollars(r.lowConfidencePotential, o)}/month) if you disable what you don't need.`
-    )
-  );
-}
-
-function printOverlaps(overlaps: Overlap[]): void {
-  console.log();
-  console.log(chalk.cyan.bold("Possible duplicate rules — consider merging"));
-  console.log(
-    chalk.dim("Reworded near-duplicates. ctxdiet won't merge these — your call.")
-  );
-  let lastFile = "";
-  for (const ov of overlaps) {
-    if (ov.file !== lastFile) {
-      console.log("  " + chalk.bold(ov.file));
-      lastFile = ov.file;
-    }
-    console.log("    " + chalk.dim("- ") + ov.a);
-    console.log("    " + chalk.dim("- ") + ov.b);
-  }
+export function gradeBadge(g: string): string {
+  if (g === "A" || g === "B") return pc.bgGreen(pc.black(` ${g} `));
+  if (g === "C") return pc.bgYellow(pc.black(` ${g} `));
+  return pc.bgRed(pc.white(` ${g} `));
 }
 
 export function printScanResult(r: ScanResult, o: ResolvedOptions): void {
@@ -80,87 +24,75 @@ export function printScanResult(r: ScanResult, o: ResolvedOptions): void {
     return;
   }
 
-  console.log();
-  console.log(
-    chalk.bold("ctxdiet") +
-      chalk.dim(`  ·  ${shortenPath(o.path, o.home)}  ·  grade `) +
-      gradeBadge(r.grade)
-  );
+  log.message(`${pc.dim(shortenPath(o.path, o.home))}   grade ${gradeBadge(r.grade)}`);
 
   if (r.detectedAgents.length === 0) {
-    console.log();
-    console.log(
-      chalk.dim(
-        "No agent setup detected here. Supported: Claude Code, Codex/AGENTS.md, " +
-          "Cursor, Gemini CLI, Windsurf, GitHub Copilot."
-      )
+    log.warn(
+      "No agent setup detected. Supported: Claude Code, Codex/AGENTS.md, " +
+        "Cursor, Gemini CLI, Windsurf, GitHub Copilot."
     );
-    console.log();
-    return;
-  }
-
-  console.log(
-    chalk.dim("Detected: ") +
-      r.detectedAgents.map((a) => chalk.cyan(a.label)).join(chalk.dim(", "))
-  );
-
-  const high = r.findings.filter((f) => f.confidence === "high");
-  const low = r.findings.filter((f) => f.confidence === "low");
-
-  // Clean: nothing auto-fixable. Say so plainly instead of an empty table.
-  if (high.length === 0) {
-    console.log();
-    if (low.length === 0 && r.overlaps.length === 0) {
-      console.log(chalk.green("Nothing to fix — your agent config is already lean."));
-    } else {
-      console.log(
-        chalk.green("No auto-fixable waste.") +
-          chalk.dim(" A few things below are worth a look.")
-      );
-      if (low.length > 0) printReview(r, low, o);
-      if (r.overlaps.length > 0) printOverlaps(r.overlaps);
-    }
     methodNote(o);
     return;
   }
 
-  // Fixable findings: one row each, with the "why" under the title.
-  console.log();
-  const table = new Table({
-    head: ["Agent", "Problem", "Saves/session", "$/mo"].map((h) => chalk.bold(h)),
-    colAligns: ["left", "left", "right", "right"],
-    style: { head: [], border: [] },
-  });
-  for (const f of high) {
-    const problem = f.detail ? `${f.title}\n${chalk.dim(f.detail)}` : f.title;
-    table.push([
-      f.agent,
-      problem,
-      f.tokensPerSession > 0 ? chalk.green(fmt(f.tokensPerSession)) : chalk.dim("0"),
-      f.tokensPerSession > 0 ? chalk.green(dollars(f.tokensPerSession, o)) : chalk.dim("$0.00"),
-    ]);
+  log.info("Detected " + r.detectedAgents.map((a) => pc.cyan(a.label)).join(pc.dim(", ")));
+
+  const high = r.findings.filter((f) => f.confidence === "high");
+  const low = r.findings.filter((f) => f.confidence === "low");
+
+  if (high.length === 0) {
+    if (low.length === 0 && r.overlaps.length === 0) {
+      log.success("Nothing to fix — your agent config is already lean.");
+    } else {
+      log.warn("No auto-fixable waste — but a few things below are worth a look.");
+    }
+  } else {
+    const body = high
+      .map((f) => {
+        const save =
+          f.tokensPerSession > 0
+            ? pc.green(`-${fmt(f.tokensPerSession)} tok`)
+            : pc.dim("review");
+        const why = f.detail ? `\n  ${pc.dim(f.detail)}` : "";
+        return `${pc.cyan(f.agent)} · ${f.title}  ${save}${why}`;
+      })
+      .join("\n\n");
+    note(body, "Fixable waste");
+    const across = r.detectedAgents.length > 1 ? `, ${r.detectedAgents.length} agents` : "";
+    log.message(
+      pc.bold("Fixable now: ") +
+        pc.bold(pc.green(`~${fmt(r.headlineSavings)} tokens/session`)) +
+        pc.dim(` (~${dollars(r.headlineSavings, o)}/mo${across})`)
+    );
   }
-  console.log(table.toString());
-  console.log();
 
-  console.log(
-    chalk.bold("Fixable now: ") +
-      chalk.bold.green(
-        `~${fmt(r.headlineSavings)} tokens/session (~${dollars(r.headlineSavings, o)}/month)`
-      ) +
-      (r.detectedAgents.length > 1
-        ? chalk.dim(` across ${r.detectedAgents.length} agents`)
-        : "")
-  );
+  if (low.length > 0) {
+    const body =
+      low
+        .map((f) => `${pc.cyan(f.agent)} · ${f.title}  ${pc.yellow(fmt(f.tokensPerSession) + " tok")}`)
+        .join("\n") + `\n${pc.dim("Disable only what you know you don't use.")}`;
+    note(body, "Review — usage unconfirmed");
+  }
 
-  if (low.length > 0) printReview(r, low, o);
-  if (r.overlaps.length > 0) printOverlaps(r.overlaps);
+  if (r.overlaps.length > 0) {
+    log.warn(
+      `${r.overlaps.length} possible duplicate rule${r.overlaps.length > 1 ? "s" : ""} — ` +
+        `resolve interactively with ${pc.bold("ctxdiet fix")}`
+    );
+  }
+
   methodNote(o);
 }
 
-// ---------------------------------------------------------------------------
-// before/after money shot
-// ---------------------------------------------------------------------------
+function methodNote(o: ResolvedOptions): void {
+  const modelNote = o.modelDetected ? " (from your Claude config)" : "";
+  log.message(
+    pc.dim(
+      `Counts: GPT-4 tokenizer for files, size estimate for dirs (offline). ` +
+        `Pricing ${o.model}${modelNote}, ${o.sessionsPerMonth} sessions/mo.`
+    )
+  );
+}
 
 export function printBeforeAfter(
   before: ScanResult,
@@ -168,44 +100,22 @@ export function printBeforeAfter(
   o: ResolvedOptions,
   lowApplied: number
 ): void {
-  const savedTokens = before.baselineTokens - after.baselineTokens;
+  const saved = before.baselineTokens - after.baselineTokens;
   const beforeCost = monthlyCost(before.baselineTokens, o.sessionsPerMonth, o.model);
   const afterCost = monthlyCost(after.baselineTokens, o.sessionsPerMonth, o.model);
+  const arrow = pc.dim("→");
 
-  const arrow = chalk.dim("→");
-  const table = new Table({
-    head: ["", "Before", "", "After", "Saved"].map((h) => chalk.bold(h)),
-    colAligns: ["left", "right", "left", "right", "right"],
-    style: { head: [], border: [] },
-  });
+  const body =
+    `Context  ${fmt(before.baselineTokens)} ${arrow} ${pc.green(fmt(after.baselineTokens))}` +
+    `   ${pc.green(`-${fmt(saved)} tok`)}\n` +
+    `Cost     ${usd(beforeCost)} ${arrow} ${usd(afterCost)}/mo` +
+    `   ${pc.green(`-${usd(beforeCost - afterCost)}`)}\n` +
+    `Grade    ${gradeBadge(before.grade)} ${arrow} ${gradeBadge(after.grade)}`;
+  note(body, "Before vs after");
 
-  table.push([
-    "Context tokens/session",
-    fmt(before.baselineTokens),
-    arrow,
-    fmt(after.baselineTokens),
-    chalk.green(fmt(savedTokens)),
-  ]);
-  table.push([
-    "$/month",
-    usd(beforeCost),
-    arrow,
-    usd(afterCost),
-    chalk.green(usd(beforeCost - afterCost)),
-  ]);
-  table.push(["Grade", gradeBadge(before.grade), arrow, gradeBadge(after.grade), ""]);
-
-  console.log();
-  console.log(chalk.bold("Before vs after"));
-  console.log(table.toString());
   if (lowApplied > 0) {
-    console.log(
-      chalk.dim(
-        `Includes ~${fmt(lowApplied)} tokens/session from review items you chose to disable.`
-      )
-    );
+    log.message(pc.dim(`Includes -${fmt(lowApplied)} tok from review items you disabled.`));
   }
-  console.log();
 }
 
 // ---------------------------------------------------------------------------
@@ -227,6 +137,7 @@ export function toJson(r: ScanResult) {
       monthlyCost(r.headlineSavings, options.sessionsPerMonth, options.model).toFixed(2)
     ),
     lowConfidencePotentialTokens: r.lowConfidencePotential,
+    overlaps: r.overlaps.length,
     findings: r.findings.map((f: Finding) => ({
       agent: f.agent,
       category: f.category,

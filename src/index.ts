@@ -1,23 +1,25 @@
 #!/usr/bin/env node
-import chalk from "chalk";
+import { intro, outro } from "@clack/prompts";
 import { Command } from "commander";
 import os from "node:os";
 import path from "node:path";
+import pc from "picocolors";
 
-import { confirm, runFix } from "./fix";
+import { promptConfirm, runFix } from "./fix";
 import { printScanResult } from "./report";
 import { scan } from "./scan";
 import { detectModel } from "./sources";
 import { Model, ResolvedOptions } from "./types";
 
-const VERSION = "0.2.0";
+const VERSION = "0.3.0";
+const BANNER = pc.bgCyan(pc.black(" ctxdiet "));
 
 /** When launched as `slimclaude`, nudge toward the new name (the old one still works). */
 function renameBannerIfNeeded(): void {
   const invokedAs = path.basename(process.argv[1] ?? "");
   if (/slimclaude/i.test(invokedAs)) {
     process.stderr.write(
-      chalk.dim("note: slimclaude is now ctxdiet — switch with `npm i ctxdiet` (this still works)\n")
+      pc.dim("note: slimclaude is now ctxdiet — switch with `npm i ctxdiet` (this still works)\n")
     );
   }
 }
@@ -99,51 +101,56 @@ program.action(async () => {
   const fromCli = program.getOptionValueSource("model") === "cli";
   const o = resolveOptions(program.opts<RawOptions>(), fromCli);
   const result = scan(o);
+
+  if (!o.json) intro(BANNER);
   printScanResult(result, o);
 
-  // CI budget gate: a check, not an interactive flow.
+  // CI budget gate — a check, not an interactive flow.
   if (o.maxTokens != null) {
     const used = result.baselineTokens.toLocaleString("en-US");
     const budget = o.maxTokens.toLocaleString("en-US");
     if (result.baselineTokens > o.maxTokens) {
-      if (!o.json) {
-        console.error(chalk.red(`✗ over budget: ${used} > ${budget} context tokens`));
-      }
+      if (!o.json) outro(pc.red(`over budget: ${used} > ${budget} context tokens`));
       process.exit(1);
     }
-    if (!o.json) console.log(chalk.green(`✓ within budget: ${used} ≤ ${budget} context tokens`));
+    if (!o.json) outro(pc.green(`within budget: ${used} <= ${budget} context tokens`));
     return;
   }
 
   if (o.json) return;
-  const fixable = result.findings.filter(
-    (f) => f.confidence === "high" && f.fixable && f.action
-  );
-  if (fixable.length === 0) return;
+
+  const fixable = result.findings.filter((f) => f.confidence === "high" && f.fixable && f.action);
+  if (fixable.length === 0 && result.overlaps.length === 0) {
+    outro(pc.dim("Nothing to apply."));
+    return;
+  }
 
   // One-step flow: offer to fix right here instead of making the user re-run.
   if (process.stdin.isTTY && !o.dryRun) {
-    const label = `Fix ${fixable.length} issue${fixable.length > 1 ? "s" : ""} now?`;
-    if (await confirm(label)) {
+    const bits: string[] = [];
+    if (fixable.length > 0) bits.push(`fix ${fixable.length} issue${fixable.length > 1 ? "s" : ""}`);
+    if (result.overlaps.length > 0) bits.push(`resolve ${result.overlaps.length} duplicate${result.overlaps.length > 1 ? "s" : ""}`);
+    if (await promptConfirm(`${bits.join(" and ")} now?`)) {
       await runFix(o);
+      outro(pc.green("Done."));
       return;
     }
   }
-  console.log(chalk.dim("Run `npx ctxdiet fix` to apply."));
+  outro(pc.dim("Run `npx ctxdiet fix` to apply."));
 });
 
 const fix = program
   .command("fix")
-  .description(
-    "Generate fixes, show diffs, apply on confirmation, then show before/after."
-  );
+  .description("Show a summary per change, confirm, apply, then report before/after.");
 addCommonOptions(fix);
 fix.action(async () => {
   renameBannerIfNeeded();
   const fromCli =
-    fix.getOptionValueSource("model") === "cli" ||
-    program.getOptionValueSource("model") === "cli";
-  await runFix(resolveOptions(fix.optsWithGlobals<RawOptions>(), fromCli));
+    fix.getOptionValueSource("model") === "cli" || program.getOptionValueSource("model") === "cli";
+  const o = resolveOptions(fix.optsWithGlobals<RawOptions>(), fromCli);
+  if (!o.json) intro(pc.bgCyan(pc.black(" ctxdiet fix ")));
+  await runFix(o);
+  if (!o.json) outro(pc.green("Done."));
 });
 
 program.parseAsync(process.argv).catch((err) => {

@@ -1,69 +1,49 @@
-import { createTwoFilesPatch } from "diff";
-import chalk from "chalk";
+import { confirm, isCancel, log, select } from "@clack/prompts";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
-import readline from "node:readline";
+import pc from "picocolors";
 
-import { printBeforeAfter, toJson } from "./report";
+import { applyOverlapResolution, ResolveChoice } from "./overlap";
+import { printBeforeAfter } from "./report";
 import { scan } from "./scan";
 import { displayPath, readFileSafe } from "./sources";
 import { trimMarkdown } from "./trim";
-import { FixAction, ResolvedOptions } from "./types";
+import { Finding, FixAction, Overlap, ResolvedOptions } from "./types";
 
 // ---------------------------------------------------------------------------
-// Change model — the concrete edit a finding maps to.
+// concrete change for a finding (computed from fresh on-disk state)
 // ---------------------------------------------------------------------------
 
 type Change =
-  | {
-      kind: "write";
-      path: string;
-      before: string;
-      after: string;
-      isNew: boolean;
-    }
+  | { kind: "write"; path: string; after: string; isNew: boolean }
   | { kind: "move"; path: string; to: string }
-  | {
-      kind: "mcp";
-      path: string;
-      before: string;
-      after: string;
-      server: string;
-    };
+  | { kind: "mcp"; path: string; after: string; server: string };
 
-/** Build the concrete change from fresh on-disk state (reflects prior edits). */
 function buildChange(action: FixAction): Change | null {
   switch (action.type) {
     case "trim": {
       const before = readFileSafe(action.path);
       const after = trimMarkdown(before);
-      if (before === after) return null;
-      return { kind: "write", path: action.path, before, after, isNew: false };
+      return before === after ? null : { kind: "write", path: action.path, after, isNew: false };
     }
-    case "ignore-create": {
-      return {
-        kind: "write",
-        path: action.path,
-        before: "",
-        after: action.content,
-        isNew: true,
-      };
-    }
+    case "ignore-create":
+      return { kind: "write", path: action.path, after: action.content, isNew: true };
     case "ignore-augment": {
       const before = readFileSafe(action.path);
-      const body = before.replace(/\n*$/, "\n");
-      const after = body + "\n# added by ctxdiet\n" + action.added.join("\n") + "\n";
-      return { kind: "write", path: action.path, before, after, isNew: false };
+      const after = before.replace(/\n*$/, "\n") + "\n# added by ctxdiet\n" + action.added.join("\n") + "\n";
+      return { kind: "write", path: action.path, after, isNew: false };
     }
     case "mcp-disable": {
       const before = readFileSafe(action.path);
       const after = disableMcpServer(before, action.server);
-      if (after === null || after === before) return null;
-      return { kind: "mcp", path: action.path, before, after, server: action.server };
+      return after === null || after === before
+        ? null
+        : { kind: "mcp", path: action.path, after, server: action.server };
     }
-    case "archive": {
+    case "archive":
       return { kind: "move", path: action.path, to: action.archiveTo };
-    }
   }
 }
 
@@ -76,66 +56,31 @@ function disableMcpServer(content: string, server: string): string | null {
   }
   const servers = json.mcpServers as Record<string, unknown> | undefined;
   if (!servers || !(server in servers)) return null;
-  const disabled =
-    (json.mcpServers_disabledByCtxdiet as Record<string, unknown>) ?? {};
+  const disabled = (json.mcpServers_disabledByCtxdiet as Record<string, unknown>) ?? {};
   disabled[server] = servers[server];
   delete servers[server];
   json.mcpServers_disabledByCtxdiet = disabled;
   return JSON.stringify(json, null, 2) + "\n";
 }
 
-// ---------------------------------------------------------------------------
-// rendering + applying
-// ---------------------------------------------------------------------------
-
-function colorizeDiff(patch: string): string {
-  return patch
-    .split("\n")
-    .map((line) => {
-      if (line.startsWith("+++") || line.startsWith("---")) return chalk.dim(line);
-      if (line.startsWith("@@")) return chalk.cyan(line);
-      if (line.startsWith("+")) return chalk.green(line);
-      if (line.startsWith("-")) return chalk.red(line);
-      return line;
-    })
-    .join("\n");
+/** One-line, human summary of a change — no raw diff. */
+function summarize(f: Finding, change: Change, o: ResolvedOptions): string {
+  const where = displayPath(change.path, o.path, o.home);
+  switch (change.kind) {
+    case "move":
+      return `Archive ${where} ${pc.dim("(" + (f.detail ?? f.title) + ")")}`;
+    case "mcp":
+      return `Disable MCP server ${pc.bold(change.server)} in ${where}`;
+    case "write":
+      if (change.isNew) return `Create ${where} ${pc.dim("— ignore " + (f.detail ?? "heavy paths"))}`;
+      if (f.category === "Ignore") return `Update ${where} ${pc.dim("— add ignore patterns")}`;
+      return `Trim ${where} ${pc.green("-" + f.tokensPerSession + " tok")} ${pc.dim("(" + (f.detail ?? "") + ")")}`;
+  }
 }
 
-function printChange(change: Change, o: ResolvedOptions): void {
-  const rel = displayPath(change.path, o.path, o.home);
-  if (change.kind === "move") {
-    console.log(
-      "  " +
-        chalk.red("archive ") +
-        rel +
-        chalk.dim("  →  ") +
-        displayPath(change.to, o.path, o.home)
-    );
-    return;
-  }
-  if (change.kind === "mcp") {
-    console.log("  " + chalk.bold(rel));
-    console.log(
-      "    " +
-        chalk.red(`- mcpServers.${change.server}`) +
-        chalk.dim("  (kept under ") +
-        chalk.green(`mcpServers_disabledByCtxdiet.${change.server}`) +
-        chalk.dim(", reversible — JSON is reserialized, .bak saved)")
-    );
-    return;
-  }
-  const label = change.isNew ? `${rel} (new file)` : rel;
-  const patch = createTwoFilesPatch(label, label, change.before, change.after, "", "", {
-    context: 2,
-  });
-  // Drop the noisy "Index:"/"===" header lines and trailing tabs the diff lib adds.
-  const cleaned = patch
-    .split("\n")
-    .filter((l) => !l.startsWith("Index: ") && !/^=+$/.test(l))
-    .map((l) => (l.startsWith("--- ") || l.startsWith("+++ ") ? l.replace(/\s+$/, "") : l))
-    .join("\n");
-  console.log(colorizeDiff(cleaned));
-}
+// ---------------------------------------------------------------------------
+// filesystem
+// ---------------------------------------------------------------------------
 
 function backup(p: string): void {
   if (!fs.existsSync(p)) return;
@@ -150,35 +95,105 @@ function applyChange(change: Change): void {
     try {
       fs.renameSync(change.path, change.to);
     } catch {
-      // cross-device or dir move fallback: copy then remove.
       fs.cpSync(change.path, change.to, { recursive: true });
       fs.rmSync(change.path, { recursive: true, force: true });
     }
     return;
   }
-  // write / mcp — back up any existing file before overwriting.
   const isNewFile = change.kind === "write" && change.isNew;
   if (!isNewFile && fs.existsSync(change.path)) backup(change.path);
   fs.mkdirSync(path.dirname(change.path), { recursive: true });
   fs.writeFileSync(change.path, change.after, "utf8");
 }
 
+/** Open $EDITOR (fallback nano) on a temp file; return the merged single-line rule. */
+function openEditor(a: string, b: string): string | null {
+  const editor = process.env.EDITOR || process.env.VISUAL || "nano";
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ctxdiet-merge-"));
+  const file = path.join(dir, "MERGE_RULE.txt");
+  fs.writeFileSync(
+    file,
+    `# Merge these two rules into one. Edit below, then save & exit.\n` +
+      `# Lines starting with # are ignored.\n${a}\n${b}\n`,
+    "utf8"
+  );
+  const [cmd, ...args] = editor.split(/\s+/);
+  const res = spawnSync(cmd, [...args, file], { stdio: "inherit" });
+  let merged: string | null = null;
+  if (!res.error && (res.status === 0 || res.status === null)) {
+    const text = fs
+      .readFileSync(file, "utf8")
+      .split("\n")
+      .filter((l) => !l.startsWith("#"))
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+    merged = text === "" ? null : text;
+  }
+  try {
+    fs.rmSync(dir, { recursive: true, force: true });
+  } catch {
+    /* ignore */
+  }
+  return merged;
+}
+
 // ---------------------------------------------------------------------------
-// prompt
+// prompts
 // ---------------------------------------------------------------------------
 
-export function confirm(question: string): Promise<boolean> {
-  if (!process.stdin.isTTY) return Promise.resolve(false);
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-  return new Promise((resolve) => {
-    rl.question(`${question} [y/N] `, (answer) => {
-      rl.close();
-      resolve(/^y(es)?$/i.test(answer.trim()));
+export async function promptConfirm(message: string): Promise<boolean> {
+  if (!process.stdin.isTTY) return false;
+  const res = await confirm({ message });
+  return !isCancel(res) && res === true;
+}
+
+/** Interactive duplicate resolution. Returns tokens reclaimed (best-effort). */
+async function resolveOverlaps(overlaps: Overlap[], o: ResolvedOptions): Promise<number> {
+  log.step(
+    `${overlaps.length} possible duplicate rule${overlaps.length > 1 ? "s" : ""} — choose what to keep`
+  );
+  let touched = 0;
+
+  for (const ov of overlaps) {
+    const where = displayPath(ov.path, o.path, o.home);
+    const choice = await select({
+      message: `${pc.dim(where)}\n  A: ${ov.a}\n  B: ${ov.b}`,
+      options: [
+        { value: "a", label: "Keep A", hint: ov.a.slice(0, 48) },
+        { value: "b", label: "Keep B", hint: ov.b.slice(0, 48) },
+        { value: "merge", label: "Merge in editor" },
+        { value: "skip", label: "Skip" },
+      ],
+      initialValue: "skip",
     });
-  });
+    if (isCancel(choice)) break;
+
+    const pick = choice as ResolveChoice;
+    if (pick === "skip") continue;
+
+    let merged: string | undefined;
+    if (pick === "merge") {
+      const result = openEditor(ov.a, ov.b);
+      if (result === null) {
+        log.warn("  merge cancelled — skipped");
+        continue;
+      }
+      merged = result;
+    }
+
+    const before = readFileSafe(ov.path);
+    const next = applyOverlapResolution(before, ov.a, ov.b, pick, merged);
+    if (next === null || next === before) {
+      log.warn("  couldn't locate the lines — skipped");
+      continue;
+    }
+    backup(ov.path);
+    fs.writeFileSync(ov.path, next, "utf8");
+    touched++;
+    log.success(`  ${where} updated`);
+  }
+  return touched;
 }
 
 // ---------------------------------------------------------------------------
@@ -187,91 +202,19 @@ export function confirm(question: string): Promise<boolean> {
 
 export async function runFix(o: ResolvedOptions): Promise<void> {
   const before = scan(o);
-  const high = before.findings.filter(
-    (f) => f.confidence === "high" && f.fixable && f.action
-  );
-  const low = before.findings.filter(
-    (f) => f.confidence === "low" && f.fixable && f.action
-  );
+  const high = before.findings.filter((f) => f.confidence === "high" && f.fixable && f.action);
+  const low = before.findings.filter((f) => f.confidence === "low" && f.fixable && f.action);
+  const overlaps = before.overlaps;
 
-  if (high.length === 0 && low.length === 0) {
-    if (o.json) {
-      console.log(JSON.stringify({ message: "nothing to fix", before: toJson(before) }, null, 2));
-    } else {
-      console.log(chalk.green("\nNothing to fix — your setup is already lean.\n"));
-    }
-    return;
-  }
-
-  let lowApplied = 0;
-
-  // ---- HIGH-confidence: normal [y/N] / --yes / --dry-run flow ----
-  if (high.length > 0 && !o.json) {
-    console.log(chalk.bold("\nHigh-confidence fixes\n"));
-  }
-  for (const f of high) {
-    const change = buildChange(f.action!);
-    if (!change) continue;
-    if (!o.json) {
-      console.log(chalk.bold(`• ${f.agent} · ${f.category} — ${f.title}`));
-      printChange(change, o);
-    }
-    const go = decideHigh(o, () => confirm("Apply this change?"));
-    await applyIf(go, change, o);
-  }
-
-  // ---- LOW-confidence: explicit interactive prompt only, never --yes ----
-  if (low.length > 0) {
-    if (o.yes) {
-      if (!o.json) {
-        console.log(
-          chalk.yellow(
-            `\nSkipped ${low.length} usage-unconfirmed item(s) (MCP servers / definitions). ` +
-              `--yes never touches these — re-run \`ctxdiet fix\` without --yes to review them.`
-          )
-        );
-      }
-    } else if (o.json) {
-      // non-interactive: cannot prompt, leave for interactive review.
-    } else {
-      console.log(chalk.yellow.bold("\nReview items — usage not confirmed\n"));
-      console.log(
-        chalk.dim(
-          "ctxdiet can't see your history. Only disable what you know you don't use.\n"
-        )
-      );
-      for (const f of low) {
-        const change = buildChange(f.action!);
-        if (!change) continue;
-        console.log(chalk.bold(`• ${f.agent} · ${f.category} — ${f.title}`));
-        printChange(change, o);
-        const verb = f.action!.type === "mcp-disable" ? "Disable" : "Archive";
-        const go = o.dryRun
-          ? false
-          : await confirm(
-              `${verb} this? Only do this if you know it's unused.`
-            );
-        if (go && !o.dryRun) {
-          applyChange(change);
-          lowApplied += f.tokensPerSession;
-          console.log(chalk.green("  applied\n"));
-        } else {
-          console.log(chalk.dim("  skipped\n"));
-        }
-      }
-    }
-  }
-
-  // ---- measure ----
-  const after = scan(o);
   if (o.json) {
     console.log(
       JSON.stringify(
         {
           dryRun: o.dryRun,
-          before: toJson(before),
-          after: toJson(after),
-          savedTokens: before.baselineTokens - after.baselineTokens,
+          fixable: high.length,
+          review: low.length,
+          overlaps: overlaps.length,
+          fixableSavingsTokens: before.headlineSavings,
         },
         null,
         2
@@ -280,31 +223,61 @@ export async function runFix(o: ResolvedOptions): Promise<void> {
     return;
   }
 
-  if (o.dryRun) {
-    console.log(chalk.yellow("\nDry run — no files were written."));
+  if (high.length === 0 && low.length === 0 && overlaps.length === 0) {
+    log.success("Nothing to fix — your setup is already lean.");
+    return;
   }
+
+  const interactive = process.stdin.isTTY && !o.dryRun;
+  let lowApplied = 0;
+
+  // ---- HIGH-confidence: summary + confirm (auto under --yes, preview under --dry-run) ----
+  for (const f of high) {
+    const change = buildChange(f.action!);
+    if (!change) continue;
+    log.step(summarize(f, change, o));
+    let go = false;
+    if (o.dryRun) go = false;
+    else if (o.yes) go = true;
+    else if (interactive) go = await promptConfirm("Apply this change?");
+    if (go) {
+      applyChange(change);
+      log.success("  applied");
+    } else if (!o.dryRun) {
+      log.message(pc.dim("  skipped"));
+    }
+  }
+
+  // ---- LOW-confidence: explicit confirm only; never under --yes ----
+  if (low.length > 0) {
+    if (o.yes) {
+      log.warn(
+        `Skipped ${low.length} usage-unconfirmed item(s). --yes never touches these — ` +
+          `run \`ctxdiet fix\` without --yes to review.`
+      );
+    } else if (interactive) {
+      for (const f of low) {
+        const change = buildChange(f.action!);
+        if (!change) continue;
+        log.step(summarize(f, change, o) + pc.dim("  (usage unconfirmed)"));
+        if (await promptConfirm("Disable this? Only if you know it's unused.")) {
+          applyChange(change);
+          lowApplied += f.tokensPerSession;
+          log.success("  done");
+        } else {
+          log.message(pc.dim("  skipped"));
+        }
+      }
+    }
+  }
+
+  // ---- Overlaps: interactive resolution (the critical fix) ----
+  if (overlaps.length > 0) {
+    if (interactive) await resolveOverlaps(overlaps, o);
+    else if (o.yes) log.warn(`${overlaps.length} duplicate-rule pair(s) need an interactive choice — skipped under --yes.`);
+  }
+
+  if (o.dryRun) log.message(pc.yellow("Dry run — no files were written."));
+  const after = scan(o);
   printBeforeAfter(before, after, o, lowApplied);
-}
-
-function decideHigh(o: ResolvedOptions, ask: () => Promise<boolean>): Promise<boolean> {
-  if (o.dryRun) return Promise.resolve(false);
-  if (o.yes) return Promise.resolve(true);
-  if (o.json) return Promise.resolve(false); // json non-interactive
-  return ask();
-}
-
-async function applyIf(
-  go: Promise<boolean>,
-  change: Change,
-  o: ResolvedOptions
-): Promise<void> {
-  const ok = await go;
-  if (ok && !o.dryRun) {
-    applyChange(change);
-    if (!o.json) console.log(chalk.green("  applied\n"));
-  } else if (!o.json && !o.dryRun) {
-    console.log(chalk.dim("  skipped\n"));
-  } else if (!o.json) {
-    console.log();
-  }
 }
