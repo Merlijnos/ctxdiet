@@ -167,7 +167,7 @@ function applyChange(change: Change): void {
 // prompt
 // ---------------------------------------------------------------------------
 
-function confirm(question: string): Promise<boolean> {
+export function confirm(question: string): Promise<boolean> {
   if (!process.stdin.isTTY) return Promise.resolve(false);
   const rl = readline.createInterface({
     input: process.stdin,

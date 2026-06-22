@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here.
 
+## [0.1.1]
+
+- Clearer scan output: problems show *what* and *why* per row; a clean setup says so
+  plainly instead of printing an empty table.
+- One-step flow: when a scan finds fixable issues in an interactive terminal, it offers
+  to fix them right away (no separate `fix` command needed).
+- Runtime notice when launched as `slimclaude` pointing to the new `ctxdiet` name.
+
 ## [0.1.0]
 
 Initial release.

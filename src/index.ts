@@ -1,13 +1,26 @@
 #!/usr/bin/env node
+import chalk from "chalk";
 import { Command } from "commander";
 import os from "node:os";
 import path from "node:path";
 
-import { runFix } from "./fix";
+import { confirm, runFix } from "./fix";
 import { printScanResult } from "./report";
 import { scan } from "./scan";
 import { detectModel } from "./sources";
 import { Model, ResolvedOptions } from "./types";
+
+const VERSION = "0.1.1";
+
+/** When launched as `slimclaude`, nudge toward the new name (the old one still works). */
+function renameBannerIfNeeded(): void {
+  const invokedAs = path.basename(process.argv[1] ?? "");
+  if (/slimclaude/i.test(invokedAs)) {
+    process.stderr.write(
+      chalk.dim("note: slimclaude is now ctxdiet — switch with `npm i ctxdiet` (this still works)\n")
+    );
+  }
+}
 
 interface RawOptions {
   path?: string;
@@ -65,13 +78,31 @@ const program = new Command();
 program
   .name("ctxdiet")
   .description("Detect, fix, and measure AI agent context-token waste.")
-  .version("0.1.0");
+  .version(VERSION);
 
 addCommonOptions(program);
-program.action(() => {
+program.action(async () => {
+  renameBannerIfNeeded();
   const fromCli = program.getOptionValueSource("model") === "cli";
   const o = resolveOptions(program.opts<RawOptions>(), fromCli);
-  printScanResult(scan(o), o);
+  const result = scan(o);
+  printScanResult(result, o);
+
+  if (o.json) return;
+  const fixable = result.findings.filter(
+    (f) => f.confidence === "high" && f.fixable && f.action
+  );
+  if (fixable.length === 0) return;
+
+  // One-step flow: offer to fix right here instead of making the user re-run.
+  if (process.stdin.isTTY && !o.dryRun) {
+    const label = `Fix ${fixable.length} issue${fixable.length > 1 ? "s" : ""} now?`;
+    if (await confirm(label)) {
+      await runFix(o);
+      return;
+    }
+  }
+  console.log(chalk.dim("Run `npx ctxdiet fix` to apply."));
 });
 
 const fix = program
@@ -81,6 +112,7 @@ const fix = program
   );
 addCommonOptions(fix);
 fix.action(async () => {
+  renameBannerIfNeeded();
   const fromCli =
     fix.getOptionValueSource("model") === "cli" ||
     program.getOptionValueSource("model") === "cli";

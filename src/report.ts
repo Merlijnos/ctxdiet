@@ -22,6 +22,40 @@ function gradeBadge(g: string): string {
   return paint.bold(` ${g} `);
 }
 
+function methodNote(o: ResolvedOptions): void {
+  const modelNote = o.modelDetected ? " (from your Claude config)" : "";
+  console.log();
+  console.log(
+    chalk.dim(
+      `Estimate: chars/4 at ${o.model} pricing${modelNote}, ${o.sessionsPerMonth} sessions/month.`
+    )
+  );
+  console.log();
+}
+
+function printReview(r: ScanResult, low: Finding[], o: ResolvedOptions): void {
+  console.log();
+  console.log(chalk.yellow.bold("Review — ctxdiet won't change these on its own"));
+  console.log(
+    chalk.dim("They cost tokens every session; only you know if they're still in use.")
+  );
+  const table = new Table({
+    head: ["Agent", "Item", "Est. tokens/session"].map((h) => chalk.dim(h)),
+    colAligns: ["left", "left", "right"],
+    style: { head: [], border: [] },
+  });
+  for (const f of low) {
+    table.push([f.agent, f.title, chalk.yellow(fmt(f.tokensPerSession))]);
+  }
+  console.log(table.toString());
+  console.log(
+    chalk.yellow(
+      `Optional: ~${fmt(r.lowConfidencePotential)} tokens/session ` +
+        `(~${dollars(r.lowConfidencePotential, o)}/month) if you disable what you don't need.`
+    )
+  );
+}
+
 export function printScanResult(r: ScanResult, o: ResolvedOptions): void {
   if (o.json) {
     console.log(JSON.stringify(toJson(r), null, 2));
@@ -48,114 +82,60 @@ export function printScanResult(r: ScanResult, o: ResolvedOptions): void {
   }
 
   console.log(
-    chalk.dim("Detected agents: ") +
+    chalk.dim("Detected: ") +
       r.detectedAgents.map((a) => chalk.cyan(a.label)).join(chalk.dim(", "))
   );
-  console.log();
 
   const high = r.findings.filter((f) => f.confidence === "high");
   const low = r.findings.filter((f) => f.confidence === "low");
 
+  // Clean: nothing auto-fixable. Say so plainly instead of an empty table.
+  if (high.length === 0) {
+    console.log();
+    if (low.length === 0) {
+      console.log(chalk.green("Nothing to fix — your agent config is already lean."));
+    } else {
+      console.log(
+        chalk.green("No auto-fixable waste.") +
+          chalk.dim(" A few items below are worth a look.")
+      );
+      printReview(r, low, o);
+    }
+    methodNote(o);
+    return;
+  }
+
+  // Fixable findings: one row each, with the "why" under the title.
+  console.log();
   const table = new Table({
-    head: ["Agent", "Type", "Finding", "Tokens/session", "$/month"].map((h) =>
-      chalk.bold(h)
-    ),
-    colAligns: ["left", "left", "left", "right", "right"],
+    head: ["Agent", "Problem", "Saves/session", "$/mo"].map((h) => chalk.bold(h)),
+    colAligns: ["left", "left", "right", "right"],
     style: { head: [], border: [] },
   });
-
-  for (const agent of r.detectedAgents) {
-    const items = high.filter((f) => f.agent === agent.label);
-    if (items.length === 0) {
-      const hasReview = low.some((f) => f.agent === agent.label);
-      table.push([
-        agent.label,
-        "—",
-        hasReview
-          ? chalk.dim("review items below")
-          : chalk.green("clean"),
-        chalk.dim("0"),
-        chalk.dim("$0.00"),
-      ]);
-      continue;
-    }
-    for (const f of items) {
-      table.push([
-        agent.label,
-        f.category,
-        f.title,
-        f.tokensPerSession > 0
-          ? chalk.green(fmt(f.tokensPerSession))
-          : chalk.dim("0"),
-        f.tokensPerSession > 0
-          ? chalk.green(dollars(f.tokensPerSession, o))
-          : chalk.dim("$0.00"),
-      ]);
-    }
+  for (const f of high) {
+    const problem = f.detail ? `${f.title}\n${chalk.dim(f.detail)}` : f.title;
+    table.push([
+      f.agent,
+      problem,
+      f.tokensPerSession > 0 ? chalk.green(fmt(f.tokensPerSession)) : chalk.dim("0"),
+      f.tokensPerSession > 0 ? chalk.green(dollars(f.tokensPerSession, o)) : chalk.dim("$0.00"),
+    ]);
   }
   console.log(table.toString());
   console.log();
 
-  // Headline — the whole pitch.
-  const acrossNote =
-    r.detectedAgents.length > 1
-      ? chalk.dim(` (summed across ${r.detectedAgents.length} agents)`)
-      : "";
   console.log(
-    chalk.bold("Estimated savings if fixed: ") +
+    chalk.bold("Fixable now: ") +
       chalk.bold.green(
-        `~${fmt(r.headlineSavings)} tokens/session (~${dollars(
-          r.headlineSavings,
-          o
-        )}/month)`
+        `~${fmt(r.headlineSavings)} tokens/session (~${dollars(r.headlineSavings, o)}/month)`
       ) +
-      acrossNote
+      (r.detectedAgents.length > 1
+        ? chalk.dim(` across ${r.detectedAgents.length} agents`)
+        : "")
   );
 
-  // LOW-confidence review section — explicitly not counted above.
-  if (low.length > 0) {
-    console.log();
-    console.log(
-      chalk.yellow.bold("Review — ctxdiet won't change these on its own")
-    );
-    console.log(
-      chalk.dim(
-        "They cost tokens every session; only you know if they're still in use."
-      )
-    );
-    const reviewTable = new Table({
-      head: ["Agent", "Type", "Item", "Est. tokens/session"].map((h) =>
-        chalk.dim(h)
-      ),
-      colAligns: ["left", "left", "left", "right"],
-      style: { head: [], border: [] },
-    });
-    for (const f of low) {
-      reviewTable.push([
-        f.agent,
-        f.category,
-        f.title,
-        chalk.yellow(fmt(f.tokensPerSession)),
-      ]);
-    }
-    console.log(reviewTable.toString());
-    console.log(
-      chalk.yellow(
-        `Optional: ~${fmt(r.lowConfidencePotential)} tokens/session ` +
-          `(~${dollars(r.lowConfidencePotential, o)}/month) if you disable what you don't need.`
-      )
-    );
-  }
-
-  const modelNote = o.modelDetected ? " (from your Claude config)" : "";
-  console.log();
-  console.log(
-    chalk.dim(
-      `Estimate: chars/4 at ${o.model} pricing${modelNote}, ${o.sessionsPerMonth} sessions/month. ` +
-        `Run \`npx ctxdiet fix\` to apply.`
-    )
-  );
-  console.log();
+  if (low.length > 0) printReview(r, low, o);
+  methodNote(o);
 }
 
 // ---------------------------------------------------------------------------
