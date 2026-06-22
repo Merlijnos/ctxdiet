@@ -48,10 +48,11 @@ export interface DetectedAgent {
   label: string;
 }
 
-/** A reworded-duplicate rule pair flagged for manual merge (never auto-changed). */
+/** A reworded-duplicate rule pair, flagged for interactive resolution in `fix`. */
 export interface Overlap {
   agent: string;
-  file: string;
+  /** Absolute path to the file containing the pair (for editing). */
+  path: string;
   a: string;
   b: string;
 }

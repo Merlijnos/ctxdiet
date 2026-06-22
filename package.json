@@ -1,6 +1,6 @@
 {
   "name": "ctxdiet",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Detect, fix, and measure AI coding-agent context-token waste across Claude Code, Codex, Cursor, Gemini, Windsurf & Copilot. Other tools report waste — ctxdiet fixes it.",
   "keywords": [
     "claude",
@@ -55,14 +55,12 @@
     "start": "node dist/src/index.js"
   },
   "dependencies": {
-    "chalk": "^4.1.2",
-    "cli-table3": "^0.6.5",
+    "@clack/prompts": "^1.6.0",
     "commander": "^12.1.0",
-    "diff": "^5.2.0",
-    "gpt-tokenizer": "^2.9.0"
+    "gpt-tokenizer": "^2.9.0",
+    "picocolors": "^1.1.1"
   },
   "devDependencies": {
-    "@types/diff": "^5.2.3",
     "@types/node": "^20.14.0",
     "typescript": "^5.5.0"
   }

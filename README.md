@@ -9,6 +9,8 @@ rules bury the signal, so the model skims, drifts, and ignores the guidance you 
 care about. ctxdiet finds the dead weight in your agent config, trims it with diffs you
 approve, and shows the context you reclaimed. Local, no account.
 
+![ctxdiet demo](demo.gif)
+
 > Prompt caching makes repeated context *cheaper* — not *better to read*. Bloat still
 > fills the context window and degrades the model's attention. ctxdiet is about keeping
 > instructions sharp, not just the bill low.
@@ -57,8 +59,8 @@ Auto-detected; only the ones you use are scanned.
 - **Leaves alone** anything whose usage it can't verify (MCP servers, real skills) — listed
   for review, never auto-removed.
 
-It also flags **reworded near-duplicate rules** for you to merge (lexical, offline — it
-won't touch them).
+It also flags **reworded near-duplicate rules** and lets you resolve them interactively
+(keep one, or merge in your editor) — lexical and offline, no ML.
 
 Token counts use a real BPE tokenizer (`gpt-tokenizer`, offline) for text files and a
 size estimate for directories. There's no exact offline Claude tokenizer, so the GPT-4
@@ -71,7 +73,7 @@ Fail a build or commit when context drifts past a budget:
 
 ```yaml
 # .github/workflows/ctxdiet.yml
-- uses: Merlijnos/ctxdiet@v0.2.0
+- uses: Merlijnos/ctxdiet@v0.3.0
   with:
     max-tokens: 8000
 ```
@@ -79,7 +81,7 @@ Fail a build or commit when context drifts past a budget:
 ```yaml
 # .pre-commit-config.yaml
 - repo: https://github.com/Merlijnos/ctxdiet
-  rev: v0.2.0
+  rev: v0.3.0
   hooks:
     - id: ctxdiet
       args: ["--max-tokens", "8000"]

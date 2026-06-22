@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented here.
 
+## [0.3.0]
+
+- **Modern CLI UI.** Rebuilt output on `@clack/prompts` + `picocolors` (intro/outro,
+  log, note boxes). Dropped `chalk`, `cli-table3`, and `diff` — fewer, lighter deps.
+- **Summaries, not diffs.** `fix` shows a one-line summary per change and a `[y/N]`
+  confirm, instead of dumping a raw unified diff.
+- **Interactive duplicate resolution.** When reworded near-duplicate rules are found,
+  `fix` walks each pair with Keep A / Keep B / Merge in editor / Skip. "Merge" opens
+  `$EDITOR` (fallback `nano`) on a temp file and applies the merged result. Detection
+  stays offline lexical word-overlap — no ML, no network.
+
 ## [0.2.0]
 
 - **Accurate token counts.** Text files are now measured with a real BPE tokenizer
