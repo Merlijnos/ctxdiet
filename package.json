@@ -31,7 +31,8 @@
   "funding": "https://github.com/sponsors/Merlijnos",
   "type": "commonjs",
   "bin": {
-    "ctxdiet": "dist/src/index.js"
+    "ctxdiet": "dist/src/index.js",
+    "slimclaude": "dist/src/index.js"
   },
   "files": [
     "dist/src",
