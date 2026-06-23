@@ -9,8 +9,6 @@ rules bury the signal, so the model skims, drifts, and ignores the guidance you 
 care about. ctxdiet finds the dead weight in your agent config, trims it with diffs you
 approve, and shows the context you reclaimed. Local, no account.
 
-![ctxdiet demo](demo.gif)
-
 > Prompt caching makes repeated context *cheaper* — not *better to read*. Bloat still
 > fills the context window and degrades the model's attention. ctxdiet is about keeping
 > instructions sharp, not just the bill low.
