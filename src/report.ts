@@ -35,7 +35,7 @@ export function gradeBadge(g: string): string {
 
 export function printScanResult(r: ScanResult, o: ResolvedOptions): void {
   if (o.json) {
-    console.log(JSON.stringify(toJson(r), null, 2));
+    console.log(JSON.stringify(printableScan(r, o), null, 2));
     return;
   }
 
@@ -156,8 +156,7 @@ export function printBeforeAfter(
 // JSON serialization (no large blobs)
 // ---------------------------------------------------------------------------
 
-export function toJson(r: ScanResult) {
-  const { options } = r;
+export function printableScan(r: ScanResult, options: ResolvedOptions = r.options) {
   return {
     schemaVersion: JSON_SCHEMA_VERSION,
     tool: "ctxdiet",

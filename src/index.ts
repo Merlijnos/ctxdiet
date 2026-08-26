@@ -96,6 +96,7 @@ function resolveOptions(raw: RawOptions, modelFromCli: boolean): ResolvedOptions
   }
 
   return {
+    version: VERSION,
     path: path.resolve(raw.path ?? process.cwd()),
     home,
     sessionsPerMonth,
@@ -188,6 +189,16 @@ program.action(async () => {
   }
   outro(pc.dim("Run `npx ctxdiet fix` to apply."));
 });
+
+program
+  .command("mcp")
+  .description("Run as an MCP server on stdio so your agent can audit its own context.")
+  .option("--path <dir>", "default directory to scan", process.cwd())
+  .option("--no-usage", "skip local session history")
+  .action(async (opts: RawOptions) => {
+    const { runMcpServer } = await import("./mcp.js");
+    await runMcpServer(resolveOptions({ ...opts, json: true }, false));
+  });
 
 const fix = program
   .command("fix")

@@ -18,6 +18,7 @@ export function write(root: string, rel: string, content: string): string {
 
 export function options(over: Partial<ResolvedOptions> = {}): ResolvedOptions {
   return {
+    version: "0.0.0-test",
     path: tmpdir("ctxdiet-proj-"),
     home: tmpdir("ctxdiet-home-"),
     sessionsPerMonth: 100,

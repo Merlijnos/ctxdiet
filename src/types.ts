@@ -6,6 +6,8 @@ export type Category = "Memory" | "Ignore" | "MCP" | "Definitions";
 export type Confidence = "high" | "low";
 
 export interface ResolvedOptions {
+  /** ctxdiet's own version, for the MCP handshake. */
+  version: string;
   /** Project directory being scanned. */
   path: string;
   /** Home directory holding global agent config (~/.claude, ~/.codex, …). */
