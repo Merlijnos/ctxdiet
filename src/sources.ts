@@ -9,6 +9,7 @@ import {
   HEAVY_WALK_MAX_FILES,
 } from "./constants.js";
 import { parseFrontmatter } from "./frontmatter.js";
+import { covers, parseIgnoreRules } from "./ignore.js";
 import { estimateTokens, estimateTokensFromBytes } from "./tokens.js";
 import type { Model, ResolvedOptions } from "./types.js";
 
@@ -147,16 +148,18 @@ export const DEFAULT_IGNORE_PATTERNS = [
   ".env", ".env.*", ".DS_Store", ".git/",
 ];
 
-export function parseIgnore(content: string): string[] {
-  return content
-    .split("\n")
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0 && !l.startsWith("#"));
-}
-
-export function ignoreCovers(patterns: string[], name: string): boolean {
-  const norm = patterns.map((p) => p.replace(/^\.\//, "").replace(/\/$/, ""));
-  return norm.includes(name) || norm.includes("/" + name);
+/** Patterns an existing ignore file is still missing, in DEFAULT order. */
+export function missingDefaultPatterns(content: string): string[] {
+  const rules = parseIgnoreRules(content);
+  return DEFAULT_IGNORE_PATTERNS.filter((pattern) => {
+    const isDir = pattern.endsWith("/");
+    const name = isDir ? pattern.slice(0, -1) : pattern;
+    // A pattern is missing only if the file does not already cover it. Glob
+    // defaults like `*.min.js` have no single path to test, so compare them
+    // literally against what is already there.
+    if (/[*?[]/.test(name)) return !rules.some((r) => r.source === pattern);
+    return !covers(rules, name, isDir);
+  });
 }
 
 function walkBytes(dir: string): number {

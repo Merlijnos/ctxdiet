@@ -2,6 +2,7 @@ import path from "node:path";
 
 import { detectAgents, type AgentDef } from "./agents.js";
 import { grade, LARGE_CLAUDEMD_TOKENS, MCP_SERVER_TOKEN_EST } from "./constants.js";
+import { covers, parseIgnoreRules } from "./ignore.js";
 import { findOverlaps } from "./overlap.js";
 import * as src from "./sources.js";
 import { estimateTokens } from "./tokens.js";
@@ -11,6 +12,7 @@ import type { Finding, Overlap, ResolvedOptions, ScanResult } from "./types.js";
 interface HeavyPath {
   name: string;
   tokens: number;
+  isDir: boolean;
 }
 
 /** Heavy dirs/files present in the project, sized once and reused per agent. */
@@ -18,8 +20,9 @@ function presentHeavyPaths(o: ResolvedOptions): HeavyPath[] {
   const out: HeavyPath[] = [];
   for (const name of [...src.HEAVY_DIRS, ...src.HEAVY_FILES]) {
     const full = path.join(o.path, name);
-    if (!src.isFile(full) && !src.isDir(full)) continue;
-    out.push({ name, tokens: src.estimatePathTokens(full) });
+    const dir = src.isDir(full);
+    if (!dir && !src.isFile(full)) continue;
+    out.push({ name, tokens: src.estimatePathTokens(full), isDir: dir });
   }
   return out;
 }
@@ -113,18 +116,21 @@ function scanAgent(
   // --- Ignore file (HIGH-confidence, auto-fixable) ---
   if (agent.ignoreFile && heavy.length > 0) {
     const ignorePath = path.join(o.path, agent.ignoreFile);
-    const ignoreExists = src.isFile(ignorePath);
-    const content = ignoreExists ? src.readFileSafe(ignorePath) : null;
-    const patterns = content ? src.parseIgnore(content) : [];
-    const uncovered = heavy.filter((h) => !src.ignoreCovers(patterns, h.name));
+    const content = src.isFile(ignorePath) ? src.readFileSafe(ignorePath) : null;
+    const rules = parseIgnoreRules(content ?? "");
+    const uncovered = heavy.filter((h) => !covers(rules, h.name, h.isDir));
     const heavyTokens = uncovered.reduce((s, h) => s + h.tokens, 0);
 
     if (uncovered.length > 0) {
       baseline += heavyTokens;
       const names = uncovered.map((h) => h.name);
-      const missingDefaults = src.DEFAULT_IGNORE_PATTERNS.filter(
-        (p) => !patterns.includes(p)
-      );
+      // Whatever we add has to actually cover what was found, or the same
+      // finding comes back on the next run. Start from the uncovered paths,
+      // then top up with any defaults the file is still missing.
+      const added = src.uniq([
+        ...uncovered.map((h) => (h.isDir ? `${h.name}/` : h.name)),
+        ...src.missingDefaultPatterns(content ?? ""),
+      ]);
       findings.push({
         agent: agent.label,
         category: "Ignore",
@@ -142,7 +148,7 @@ function scanAgent(
                 path: ignorePath,
                 content: src.DEFAULT_IGNORE_PATTERNS.join("\n") + "\n",
               }
-            : { type: "ignore-augment", path: ignorePath, added: missingDefaults },
+            : { type: "ignore-augment", path: ignorePath, added },
       });
     }
   }

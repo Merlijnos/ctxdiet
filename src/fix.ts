@@ -16,6 +16,8 @@ import type { Finding, FixAction, Overlap, ResolvedOptions } from "./types.js";
 // concrete change for a finding (computed from fresh on-disk state)
 // ---------------------------------------------------------------------------
 
+const MARKER = "# added by ctxdiet";
+
 type Change =
   | { kind: "write"; path: string; after: string; isNew: boolean }
   | { kind: "move"; path: string; to: string }
@@ -33,7 +35,15 @@ function buildChange(action: FixAction): Change | null {
       return { kind: "write", path: action.path, after: action.content, isNew: true };
     case "ignore-augment": {
       const before = readFileSafe(action.path);
-      const after = before.replace(/\n*$/, "\n") + "\n# added by ctxdiet\n" + action.added.join("\n") + "\n";
+      const existing = new Set(
+        before.split("\n").map((l) => l.trim()).filter(Boolean)
+      );
+      const fresh = action.added.filter((p) => !existing.has(p));
+      if (fresh.length === 0) return null;
+      // Only stamp the marker once; re-running fix used to append a fresh
+      // "# added by ctxdiet" header on every pass.
+      const header = before.includes(MARKER) ? "" : `\n${MARKER}\n`;
+      const after = before.replace(/\n*$/, "\n") + header + fresh.join("\n") + "\n";
       return { kind: "write", path: action.path, after, isNew: false };
     }
     case "mcp-disable": {
