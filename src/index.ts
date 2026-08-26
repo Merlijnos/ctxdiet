@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { intro, outro } from "@clack/prompts";
 import { Command } from "commander";
+import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import pc from "picocolors";
@@ -12,7 +13,17 @@ import { GRADES, gradeRank } from "./constants.js";
 import { detectModel } from "./sources.js";
 import type { Model, ResolvedOptions } from "./types.js";
 
-const VERSION = "0.3.0";
+/** Single source of truth: package.json, read from the installed layout. */
+function readVersion(): string {
+  try {
+    const pkg = createRequire(import.meta.url)("../../package.json") as { version?: string };
+    return pkg.version ?? "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+}
+
+const VERSION = readVersion();
 const BANNER = pc.bgCyan(pc.black(" ctxdiet "));
 
 /** When launched as `slimclaude`, nudge toward the new name (the old one still works). */

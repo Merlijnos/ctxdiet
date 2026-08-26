@@ -1,7 +1,7 @@
 {
   "name": "ctxdiet",
-  "version": "0.3.0",
-  "description": "Detect, fix, and measure AI coding-agent context-token waste across Claude Code, Codex, Cursor, Gemini, Windsurf & Copilot. Other tools report waste \u2014 ctxdiet fixes it.",
+  "version": "0.4.0",
+  "description": "Detect, fix, and measure AI coding-agent context-token waste across Claude Code, Codex, Cursor, Gemini, Windsurf, Copilot, Cline, Roo & more. Other tools report waste \u2014 ctxdiet fixes it.",
   "keywords": [
     "claude",
     "claude-code",
@@ -21,7 +21,14 @@
     "ai-agents",
     "cursorrules",
     "cli",
-    "ai"
+    "ai",
+    "cline",
+    "roo-code",
+    "aider",
+    "zed",
+    "junie",
+    "agent-rules",
+    "context-engineering"
   ],
   "license": "MIT",
   "author": "Merlijn de Groot <merlijndegroot498@gmail.com>",
@@ -41,6 +48,7 @@
   },
   "files": [
     "dist/src",
+    "CHANGELOG.md",
     "README.md",
     "LICENSE"
   ],
@@ -51,10 +59,11 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "prepare": "tsc",
-    "test": "tsc && node --test dist/test/*.test.js",
+    "test": "npm run clean && tsc && node --test dist/test/*.test.js",
     "prepublishOnly": "npm test",
     "start": "node dist/src/index.js",
-    "coverage": "tsc && node --test --experimental-test-coverage dist/test/*.test.js"
+    "coverage": "npm run clean && tsc && node --test --experimental-test-coverage dist/test/*.test.js",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
   },
   "dependencies": {
     "@clack/prompts": "^1.7.0",
