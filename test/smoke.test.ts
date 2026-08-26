@@ -6,7 +6,7 @@ import { test } from "node:test";
 
 import { runFix } from "../src/fix.js";
 import { scan } from "../src/scan.js";
-import { ResolvedOptions } from "../src/types.js";
+import type { ResolvedOptions } from "../src/types.js";
 
 function tmpdir(prefix: string): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));

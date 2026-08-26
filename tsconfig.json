@@ -1,18 +1,38 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
+    "target": "ES2023",
+    "lib": ["ES2023"],
     "module": "nodenext",
     "moduleResolution": "nodenext",
+    "types": ["node"],
     "rootDir": ".",
     "outDir": "dist",
+    "sourceMap": true,
+    "inlineSources": true,
+    "declaration": false,
+
+    /* Correctness. Every one of these has caught something real here. */
     "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "useUnknownInCatchVariables": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+
+    /* Hygiene. */
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "allowUnreachableCode": false,
+    "allowUnusedLabels": false,
+
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "skipLibCheck": true,
-    "types": ["node"],
-    "forceConsistentCasingInFileNames": true,
-    "declaration": false,
-    "sourceMap": false
+    "forceConsistentCasingInFileNames": true
   },
   "include": ["src/**/*", "test/**/*"]
 }

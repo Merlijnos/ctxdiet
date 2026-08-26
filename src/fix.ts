@@ -5,12 +5,12 @@ import os from "node:os";
 import path from "node:path";
 import pc from "picocolors";
 
-import { applyOverlapResolution, ResolveChoice } from "./overlap.js";
+import { applyOverlapResolution, type ResolveChoice } from "./overlap.js";
 import { printBeforeAfter } from "./report.js";
 import { scan } from "./scan.js";
 import { displayPath, readFileSafe } from "./sources.js";
 import { trimMarkdown } from "./trim.js";
-import { Finding, FixAction, Overlap, ResolvedOptions } from "./types.js";
+import type { Finding, FixAction, Overlap, ResolvedOptions } from "./types.js";
 
 // ---------------------------------------------------------------------------
 // concrete change for a finding (computed from fresh on-disk state)
@@ -54,12 +54,12 @@ function disableMcpServer(content: string, server: string): string | null {
   } catch {
     return null;
   }
-  const servers = json.mcpServers as Record<string, unknown> | undefined;
+  const servers = json["mcpServers"] as Record<string, unknown> | undefined;
   if (!servers || !(server in servers)) return null;
-  const disabled = (json.mcpServers_disabledByCtxdiet as Record<string, unknown>) ?? {};
+  const disabled = (json["mcpServers_disabledByCtxdiet"] as Record<string, unknown>) ?? {};
   disabled[server] = servers[server];
   delete servers[server];
-  json.mcpServers_disabledByCtxdiet = disabled;
+  json["mcpServers_disabledByCtxdiet"] = disabled;
   return JSON.stringify(json, null, 2) + "\n";
 }
 
@@ -108,7 +108,7 @@ function applyChange(change: Change): void {
 
 /** Open $EDITOR (fallback nano) on a temp file; return the merged single-line rule. */
 function openEditor(a: string, b: string): string | null {
-  const editor = process.env.EDITOR || process.env.VISUAL || "nano";
+  const editor = process.env["VISUAL"] || process.env["EDITOR"] || "nano";
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ctxdiet-merge-"));
   const file = path.join(dir, "MERGE_RULE.txt");
   fs.writeFileSync(
@@ -117,8 +117,12 @@ function openEditor(a: string, b: string): string | null {
       `# Lines starting with # are ignored.\n${a}\n${b}\n`,
     "utf8"
   );
-  const [cmd, ...args] = editor.split(/\s+/);
-  const res = spawnSync(cmd, [...args, file], { stdio: "inherit" });
+  // $EDITOR may carry arguments ("code --wait"); an empty or blank value must
+  // not turn into spawnSync(undefined).
+  const [cmd, ...args] = editor.trim().split(/\s+/).filter(Boolean);
+  const res = cmd
+    ? spawnSync(cmd, [...args, file], { stdio: "inherit" })
+    : { error: new Error("no editor configured"), status: null };
   let merged: string | null = null;
   if (!res.error && (res.status === 0 || res.status === null)) {
     const text = fs

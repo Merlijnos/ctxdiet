@@ -9,7 +9,7 @@ import { promptConfirm, runFix } from "./fix.js";
 import { printScanResult } from "./report.js";
 import { scan } from "./scan.js";
 import { detectModel } from "./sources.js";
-import { Model, ResolvedOptions } from "./types.js";
+import type { Model, ResolvedOptions } from "./types.js";
 
 const VERSION = "0.3.0";
 const BANNER = pc.bgCyan(pc.black(" ctxdiet "));

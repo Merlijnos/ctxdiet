@@ -7,7 +7,7 @@ import {
   HEAVY_WALK_MAX_FILES,
 } from "./constants.js";
 import { estimateTokens, estimateTokensFromBytes } from "./tokens.js";
-import { Model, ResolvedOptions } from "./types.js";
+import type { Model, ResolvedOptions } from "./types.js";
 
 // ---------------------------------------------------------------------------
 // fs helpers
@@ -77,7 +77,7 @@ export function detectModel(home: string): Model | null {
     } catch {
       continue;
     }
-    const raw = (json as Record<string, unknown>)?.model;
+    const raw = (json as Record<string, unknown>)?.["model"];
     const value = typeof raw === "string" ? raw.toLowerCase() : "";
     if (value.includes("opus")) return "opus";
     if (value.includes("haiku")) return "haiku";
@@ -215,7 +215,7 @@ export function readMcpServers(file: string): string[] {
   } catch {
     return []; // malformed JSON — skip rather than guess
   }
-  const servers = (json as Record<string, unknown>)?.mcpServers;
+  const servers = (json as Record<string, unknown>)?.["mcpServers"];
   if (servers && typeof servers === "object") {
     return Object.keys(servers as Record<string, unknown>);
   }

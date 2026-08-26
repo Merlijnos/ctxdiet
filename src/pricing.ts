@@ -1,4 +1,4 @@
-import { Model } from "./types.js";
+import type { Model } from "./types.js";
 
 /** Input price in USD per million tokens. Estimates for cost projection only. */
 export const PRICE_PER_MTOK: Record<Model, number> = {
