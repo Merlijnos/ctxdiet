@@ -16,6 +16,8 @@ export interface ResolvedOptions {
   modelDetected: boolean;
   /** CI budget: exit non-zero if baseline context exceeds this. null = off. */
   maxTokens: number | null;
+  /** CI gate: exit non-zero if the grade is worse than this. null = off. */
+  failOn: string | null;
   json: boolean;
   dryRun: boolean;
   yes: boolean;
@@ -35,6 +37,8 @@ export interface Finding {
   category: Category;
   /** Short "what was found" line for the table. */
   title: string;
+  /** Absolute path this finding is about, when it is about one file. */
+  path?: string;
   detail?: string;
   tokensPerSession: number;
   confidence: Confidence;

@@ -8,6 +8,7 @@ import pc from "picocolors";
 import { promptConfirm, runFix } from "./fix.js";
 import { printScanResult } from "./report.js";
 import { scan } from "./scan.js";
+import { GRADES, gradeRank } from "./constants.js";
 import { detectModel } from "./sources.js";
 import type { Model, ResolvedOptions } from "./types.js";
 
@@ -29,9 +30,18 @@ interface RawOptions {
   sessionsPerMonth?: string;
   model?: string;
   maxTokens?: string;
+  failOn?: string;
   json?: boolean;
   dryRun?: boolean;
   yes?: boolean;
+}
+
+/** Wrong invocation, distinct from a gate that legitimately failed. */
+const EXIT_USAGE = 2;
+
+function usageError(message: string): never {
+  console.error(message);
+  process.exit(EXIT_USAGE);
 }
 
 function resolveOptions(raw: RawOptions, modelFromCli: boolean): ResolvedOptions {
@@ -42,8 +52,7 @@ function resolveOptions(raw: RawOptions, modelFromCli: boolean): ResolvedOptions
   if (modelFromCli) {
     const m = (raw.model ?? "sonnet").toLowerCase();
     if (m !== "opus" && m !== "sonnet" && m !== "haiku") {
-      console.error(`Invalid --model "${raw.model}". Use opus, sonnet, or haiku.`);
-      process.exit(1);
+      usageError(`Invalid --model "${raw.model}". Use opus, sonnet, or haiku.`);
     }
     model = m;
   } else {
@@ -59,10 +68,18 @@ function resolveOptions(raw: RawOptions, modelFromCli: boolean): ResolvedOptions
   if (raw.maxTokens != null) {
     const n = Number.parseInt(raw.maxTokens, 10);
     if (!Number.isFinite(n) || n <= 0) {
-      console.error(`Invalid --max-tokens "${raw.maxTokens}". Use a positive integer.`);
-      process.exit(1);
+      usageError(`Invalid --max-tokens "${raw.maxTokens}". Use a positive integer.`);
     }
     maxTokens = n;
+  }
+
+  let failOn: string | null = null;
+  if (raw.failOn != null) {
+    const g = raw.failOn.toUpperCase();
+    if (!(GRADES as readonly string[]).includes(g)) {
+      usageError(`Invalid --fail-on "${raw.failOn}". Use one of ${GRADES.join(", ")}.`);
+    }
+    failOn = g;
   }
 
   return {
@@ -72,6 +89,7 @@ function resolveOptions(raw: RawOptions, modelFromCli: boolean): ResolvedOptions
     model,
     modelDetected,
     maxTokens,
+    failOn,
     json: Boolean(raw.json),
     dryRun: Boolean(raw.dryRun),
     yes: Boolean(raw.yes),
@@ -84,6 +102,7 @@ function addCommonOptions(cmd: Command): Command {
     .option("--sessions-per-month <n>", "sessions/month for cost estimate", "100")
     .option("--model <model>", "pricing model: opus|sonnet|haiku", "sonnet")
     .option("--max-tokens <n>", "CI budget: exit non-zero if context exceeds n tokens")
+    .option("--fail-on <grade>", "CI gate: exit non-zero if the grade is worse than this (A-F)")
     .option("--json", "machine-readable JSON output")
     .option("--dry-run", "show changes but write nothing")
     .option("--yes", "apply all high-confidence fixes without prompting");
@@ -105,15 +124,26 @@ program.action(async () => {
   if (!o.json) intro(BANNER);
   printScanResult(result, o);
 
-  // CI budget gate — a check, not an interactive flow.
-  if (o.maxTokens != null) {
+  // CI gates — checks, not interactive flows.
+  if (o.maxTokens != null || o.failOn != null) {
+    const failures: string[] = [];
     const used = result.baselineTokens.toLocaleString("en-US");
-    const budget = o.maxTokens.toLocaleString("en-US");
-    if (result.baselineTokens > o.maxTokens) {
-      if (!o.json) outro(pc.red(`over budget: ${used} > ${budget} context tokens`));
+
+    if (o.maxTokens != null && result.baselineTokens > o.maxTokens) {
+      failures.push(`over budget: ${used} > ${o.maxTokens.toLocaleString("en-US")} context tokens`);
+    }
+    if (o.failOn != null && gradeRank(result.grade) > gradeRank(o.failOn)) {
+      failures.push(`grade ${result.grade} is worse than the ${o.failOn} floor`);
+    }
+
+    if (failures.length > 0) {
+      if (!o.json) outro(pc.red(failures.join("; ")));
       process.exit(1);
     }
-    if (!o.json) outro(pc.green(`within budget: ${used} <= ${budget} context tokens`));
+    if (!o.json) {
+      const passed = o.maxTokens != null ? `within budget: ${used} context tokens` : `grade ${result.grade}`;
+      outro(pc.green(passed));
+    }
     return;
   }
 

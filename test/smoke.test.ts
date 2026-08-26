@@ -20,6 +20,7 @@ function options(over: Partial<ResolvedOptions>): ResolvedOptions {
     model: "sonnet",
     modelDetected: false,
     maxTokens: null,
+    failOn: null,
     json: true,
     dryRun: false,
     yes: false,

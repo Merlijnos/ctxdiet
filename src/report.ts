@@ -5,6 +5,12 @@ import { monthlyCost } from "./pricing.js";
 import { shortenPath } from "./sources.js";
 import type { Finding, ResolvedOptions, ScanResult } from "./types.js";
 
+/**
+ * Bumped on any breaking change to --json. Consumers pin on it; the CI gate and
+ * anything scripting `fix --json` need a contract they can rely on.
+ */
+export const JSON_SCHEMA_VERSION = 1;
+
 const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
 const usd = (n: number) => `$${n.toFixed(2)}`;
 
@@ -125,6 +131,8 @@ export function printBeforeAfter(
 export function toJson(r: ScanResult) {
   const { options } = r;
   return {
+    schemaVersion: JSON_SCHEMA_VERSION,
+    tool: "ctxdiet",
     path: options.path,
     model: options.model,
     sessionsPerMonth: options.sessionsPerMonth,
@@ -137,12 +145,14 @@ export function toJson(r: ScanResult) {
       monthlyCost(r.headlineSavings, options.sessionsPerMonth, options.model).toFixed(2)
     ),
     lowConfidencePotentialTokens: r.lowConfidencePotential,
-    overlaps: r.overlaps.length,
+    overlaps: r.overlaps.map((o) => ({ agent: o.agent, path: o.path, a: o.a, b: o.b })),
+    overlapCount: r.overlaps.length,
     findings: r.findings.map((f: Finding) => ({
       agent: f.agent,
       category: f.category,
       title: f.title,
       detail: f.detail,
+      path: f.path ?? null,
       tokensPerSession: f.tokensPerSession,
       confidence: f.confidence,
       fixable: f.fixable,

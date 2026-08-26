@@ -104,6 +104,7 @@ function scanAgent(
         agent: agent.label,
         category: "Memory",
         title: `${label}${via}: ${saved.toLocaleString()} redundant tokens`,
+        path: file,
         detail: "duplicate lines, blank runs, trailing whitespace",
         tokensPerSession: saved,
         confidence: "high",
@@ -115,6 +116,7 @@ function scanAgent(
         agent: agent.label,
         category: "Memory",
         title: `${label}${via}: large (${origTokens.toLocaleString()} tokens)`,
+        path: file,
         detail: "no auto-trimmable redundancy — shorten manually",
         tokensPerSession: 0,
         confidence: "high",
@@ -153,6 +155,7 @@ function scanAgent(
         title: content === null
           ? `${agent.ignoreFile} missing — ${uncovered.length} heavy path(s) unignored`
           : `${agent.ignoreFile} weak — ${uncovered.length} heavy path(s) unignored`,
+        path: ignorePath,
         detail: names.join(", "),
         tokensPerSession: heavyTokens,
         confidence: "high",
@@ -177,6 +180,7 @@ function scanAgent(
         agent: agent.label,
         category: "MCP",
         title: `${server} (${src.displayPath(file, o.path, o.home)})`,
+        path: file,
         detail: "usage not confirmed — disable only if you know you don't use it",
         tokensPerSession: MCP_SERVER_TOKEN_EST,
         confidence: "low",
@@ -214,6 +218,7 @@ function scanAgent(
         agent: agent.label,
         category: "Definitions",
         title: src.displayPath(real.path, o.path, o.home),
+        path: real.path,
         detail:
           `${real.tokens.toLocaleString()} tok of description loaded every session ` +
           `(+${real.onDemandTokens.toLocaleString()} only when invoked) — ` +

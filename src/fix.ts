@@ -6,7 +6,7 @@ import path from "node:path";
 import pc from "picocolors";
 
 import { applyOverlapResolution, type ResolveChoice } from "./overlap.js";
-import { printBeforeAfter } from "./report.js";
+import { JSON_SCHEMA_VERSION, printBeforeAfter } from "./report.js";
 import { scan } from "./scan.js";
 import { archivePathFor, displayPath, readFileSafe } from "./sources.js";
 import { trimMarkdown } from "./trim.js";
@@ -81,6 +81,11 @@ function disableMcpServer(content: string, server: string): string | null {
 }
 
 /** One-line, human summary of a change — no raw diff. */
+/** Paths a change touches, for machine-readable reporting. */
+function changePaths(change: Change): string[] {
+  return change.kind === "move-many" ? change.moves.map((m) => m.path) : [change.path];
+}
+
 function summarize(f: Finding, change: Change, o: ResolvedOptions): string {
   const here = (p: string) => displayPath(p, o.path, o.home);
   switch (change.kind) {
@@ -242,15 +247,39 @@ export async function runFix(o: ResolvedOptions): Promise<void> {
   const low = before.findings.filter((f) => f.confidence === "low" && f.fixable && f.action);
   const overlaps = before.overlaps;
 
+  // --json is a scripting surface, not a preview. It used to report what it
+  // *would* do and then return without touching anything, so `fix --json --yes`
+  // in a pipeline silently did nothing. It now applies exactly what a
+  // non-interactive run applies — high-confidence changes under --yes — and
+  // reports what happened.
   if (o.json) {
+    const applied: string[] = [];
+    const skipped: string[] = [];
+    for (const f of high) {
+      const change = f.action ? buildChange(f.action) : null;
+      if (!change) continue;
+      const target = changePaths(change);
+      if (o.yes && !o.dryRun) {
+        applyChange(change);
+        applied.push(...target);
+      } else {
+        skipped.push(...target);
+      }
+    }
+    const after = o.yes && !o.dryRun ? scan(o) : before;
     console.log(
       JSON.stringify(
         {
+          schemaVersion: JSON_SCHEMA_VERSION,
+          tool: "ctxdiet",
           dryRun: o.dryRun,
-          fixable: high.length,
-          review: low.length,
-          overlaps: overlaps.length,
-          fixableSavingsTokens: before.headlineSavings,
+          applied,
+          skipped,
+          reviewPending: low.length,
+          overlapsPending: overlaps.length,
+          baselineTokensBefore: before.baselineTokens,
+          baselineTokensAfter: after.baselineTokens,
+          savedTokens: before.baselineTokens - after.baselineTokens,
         },
         null,
         2

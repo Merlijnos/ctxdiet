@@ -34,6 +34,15 @@ const GRADE_THRESHOLDS: ReadonlyArray<readonly [number, string]> = [
   [10000, "D"],
 ];
 
+export const GRADES = ["A", "B", "C", "D", "F"] as const;
+export type Grade = (typeof GRADES)[number];
+
+/** Lower is better. Used by --fail-on to compare a result against a floor. */
+export function gradeRank(g: string): number {
+  const i = (GRADES as readonly string[]).indexOf(g);
+  return i < 0 ? GRADES.length : i;
+}
+
 export function grade(wasteTokens: number): string {
   for (const [limit, letter] of GRADE_THRESHOLDS) {
     if (wasteTokens < limit) return letter;
