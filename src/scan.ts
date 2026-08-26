@@ -3,6 +3,7 @@ import path from "node:path";
 import { detectAgents, type AgentDef } from "./agents.js";
 import { grade, LARGE_CLAUDEMD_TOKENS, MCP_SERVER_TOKEN_EST } from "./constants.js";
 import { covers, parseIgnoreRules } from "./ignore.js";
+import { resolveImports } from "./imports.js";
 import { findOverlaps } from "./overlap.js";
 import * as src from "./sources.js";
 import { estimateTokens } from "./tokens.js";
@@ -73,8 +74,22 @@ function scanAgent(
   let baseline = 0;
 
   // --- Memory / instruction files (HIGH-confidence, auto-trimmable) ---
-  for (const file of agent.memoryFiles(o)) {
-    if (!src.isFile(file)) continue;
+  // A memory file may pull in others with @imports; the whole tree is loaded
+  // every session, so the whole tree is scanned and trimmed.
+  const seen = new Set<string>();
+  const queue = agent.memoryFiles(o).map((file) => ({ file, imported: false }));
+
+  for (let i = 0; i < queue.length; i++) {
+    const entry = queue[i];
+    if (entry === undefined) continue;
+    const { file, imported } = entry;
+    if (seen.has(file) || !src.isFile(file)) continue;
+    seen.add(file);
+
+    for (const dep of resolveImports(file, src.readFileSafe, o.home)) {
+      if (!seen.has(dep.path)) queue.push({ file: dep.path, imported: true });
+    }
+
     const original = src.readFileSafe(file);
     const origTokens = estimateTokens(original);
     baseline += origTokens;
@@ -82,12 +97,13 @@ function scanAgent(
     const trimmed = trimMarkdown(original);
     const saved = origTokens - estimateTokens(trimmed);
     const label = src.displayPath(file, o.path, o.home);
+    const via = imported ? " (imported)" : "";
 
     if (saved > 0) {
       findings.push({
         agent: agent.label,
         category: "Memory",
-        title: `${label}: ${saved.toLocaleString()} redundant tokens`,
+        title: `${label}${via}: ${saved.toLocaleString()} redundant tokens`,
         detail: "duplicate lines, blank runs, trailing whitespace",
         tokensPerSession: saved,
         confidence: "high",
@@ -98,7 +114,7 @@ function scanAgent(
       findings.push({
         agent: agent.label,
         category: "Memory",
-        title: `${label}: large (${origTokens.toLocaleString()} tokens)`,
+        title: `${label}${via}: large (${origTokens.toLocaleString()} tokens)`,
         detail: "no auto-trimmable redundancy — shorten manually",
         tokensPerSession: 0,
         confidence: "high",
