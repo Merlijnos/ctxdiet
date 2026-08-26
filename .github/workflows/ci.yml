@@ -26,6 +26,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
+      - run: npm run lint:dashes
       - run: npm test
 
   self-check:
@@ -38,5 +39,5 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      # ctxdiet must stay within its own budget — dogfooding the CI gate.
+      # ctxdiet must stay within its own budget: dogfooding the CI gate.
       - run: node dist/src/index.js --path . --max-tokens 4000 --fail-on A

@@ -50,7 +50,7 @@ test("counts MCP calls per server and per tool", () => {
 
 test("a tool named in the system prompt but never called is not 'used'", () => {
   // Transcripts embed every tool definition. Scanning for the name anywhere in
-  // the file reported every configured server as used — the exact inversion
+  // the file reported every configured server as used: the exact inversion
   // this feature exists to avoid.
   const home = tmpdir();
   const dir = path.join(home, ".claude", "projects", "-repo");

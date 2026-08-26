@@ -10,7 +10,7 @@ import { parseFrontmatter } from "./frontmatter.js";
  *   - repeated substantial lines *within one section*
  *
  * Left alone: YAML front matter, fenced code blocks, indented code blocks, and
- * anything that only repeats across different sections — a rule restated under
+ * anything that only repeats across different sections. A rule restated under
  * a different heading is usually deliberate emphasis, not an accidental paste.
  */
 
@@ -74,7 +74,7 @@ function trimBody(input: string): string {
     const trimmed = line.trim();
 
     if (HEADING.test(trimmed)) {
-      // Only drop a repeated heading when it introduces nothing — otherwise
+      // Only drop a repeated heading when it introduces nothing. Otherwise
       // removing it silently reparents that section's content under the
       // previous heading, which changes what the file says.
       const previous = lastContentLine(out);

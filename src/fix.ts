@@ -80,7 +80,7 @@ function disableMcpServer(content: string, server: string): string | null {
   return JSON.stringify(json, null, 2) + "\n";
 }
 
-/** One-line, human summary of a change — no raw diff. */
+/** One-line, human summary of a change, never a raw diff. */
 /** Paths a change touches, for machine-readable reporting. */
 function changePaths(change: Change): string[] {
   return change.kind === "move-many" ? change.moves.map((m) => m.path) : [change.path];
@@ -100,9 +100,9 @@ function summarize(f: Finding, change: Change, o: ResolvedOptions): string {
       return `Disable MCP server ${pc.bold(change.server)} in ${here(change.path)}`;
     case "write":
       if (change.isNew)
-        return `Create ${here(change.path)} ${pc.dim("— ignore " + (f.detail ?? "heavy paths"))}`;
+        return `Create ${here(change.path)} ${pc.dim("ignores " + (f.detail ?? "heavy paths"))}`;
       if (f.category === "Ignore")
-        return `Update ${here(change.path)} ${pc.dim("— add ignore patterns")}`;
+        return `Update ${here(change.path)} ${pc.dim("adds ignore patterns")}`;
       return `Trim ${here(change.path)} ${pc.green("-" + f.tokensPerSession + " tok")} ${pc.dim("(" + (f.detail ?? "") + ")")}`;
   }
 }
@@ -192,7 +192,7 @@ export async function promptConfirm(message: string): Promise<boolean> {
 /** Interactive duplicate resolution. Returns tokens reclaimed (best-effort). */
 async function resolveOverlaps(overlaps: Overlap[], o: ResolvedOptions): Promise<number> {
   log.step(
-    `${overlaps.length} possible duplicate rule${overlaps.length > 1 ? "s" : ""} — choose what to keep`
+    `${overlaps.length} possible duplicate rule${overlaps.length > 1 ? "s" : ""}. Choose what to keep.`
   );
   let touched = 0;
 
@@ -217,7 +217,7 @@ async function resolveOverlaps(overlaps: Overlap[], o: ResolvedOptions): Promise
     if (pick === "merge") {
       const result = openEditor(ov.a, ov.b);
       if (result === null) {
-        log.warn("  merge cancelled — skipped");
+        log.warn("  merge cancelled, skipped");
         continue;
       }
       merged = result;
@@ -226,7 +226,7 @@ async function resolveOverlaps(overlaps: Overlap[], o: ResolvedOptions): Promise
     const before = readFileSafe(ov.path);
     const next = applyOverlapResolution(before, ov.a, ov.b, pick, merged);
     if (next === null || next === before) {
-      log.warn("  couldn't locate the lines — skipped");
+      log.warn("  couldn't locate the lines, skipped");
       continue;
     }
     backup(ov.path);
@@ -254,7 +254,7 @@ export async function runFix(o: ResolvedOptions): Promise<void> {
   // --json is a scripting surface, not a preview. It used to report what it
   // *would* do and then return without touching anything, so `fix --json --yes`
   // in a pipeline silently did nothing. It now applies exactly what a
-  // non-interactive run applies — high-confidence changes under --yes — and
+  // non-interactive run applies (high-confidence changes under --yes) and
   // reports what happened.
   if (o.json) {
     const applied: string[] = [];
@@ -296,7 +296,7 @@ export async function runFix(o: ResolvedOptions): Promise<void> {
   }
 
   if (high.length === 0 && low.length === 0 && overlaps.length === 0) {
-    log.success("Nothing to fix — your setup is already lean.");
+    log.success("Nothing to fix. Your setup is already lean.");
     return;
   }
 
@@ -336,10 +336,10 @@ export async function runFix(o: ResolvedOptions): Promise<void> {
         log.success("  applied");
       }
       const rest = low.length - proven.length;
-      if (rest > 0) log.warn(`Left ${rest} usage-unconfirmed item(s) alone — no evidence either way.`);
+      if (rest > 0) log.warn(`Left ${rest} usage-unconfirmed item(s) alone. No evidence either way.`);
     } else if (o.yes) {
       const hint = proven.length > 0
-        ? ` ${proven.length} of them are never used in your session history — add --include-unused to act on those.`
+        ? ` ${proven.length} of them are never used in your session history. Add --include-unused to act on those.`
         : "";
       log.warn(`Skipped ${low.length} item(s) that need a person.${hint}`);
     } else if (interactive) {
@@ -365,10 +365,10 @@ export async function runFix(o: ResolvedOptions): Promise<void> {
   // ---- Overlaps: interactive resolution (the critical fix) ----
   if (overlaps.length > 0) {
     if (interactive) await resolveOverlaps(overlaps, o);
-    else if (o.yes) log.warn(`${overlaps.length} duplicate-rule pair(s) need an interactive choice — skipped under --yes.`);
+    else if (o.yes) log.warn(`${overlaps.length} duplicate-rule pair(s) need an interactive choice, so they were skipped under --yes.`);
   }
 
-  if (o.dryRun) log.message(pc.yellow("Dry run — no files were written."));
+  if (o.dryRun) log.message(pc.yellow("Dry run. No files were written."));
   const after = scan(o);
   printBeforeAfter(before, after, o, lowApplied);
 }

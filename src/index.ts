@@ -31,7 +31,7 @@ function renameBannerIfNeeded(): void {
   const invokedAs = path.basename(process.argv[1] ?? "");
   if (/slimclaude/i.test(invokedAs)) {
     process.stderr.write(
-      pc.dim("note: slimclaude is now ctxdiet — switch with `npm i ctxdiet` (this still works)\n")
+      pc.dim("note: slimclaude is now ctxdiet; switch with `npm i ctxdiet` (this still works)\n")
     );
   }
 }
@@ -145,7 +145,7 @@ program.action(async () => {
   if (!o.json) intro(BANNER);
   printScanResult(result, o);
 
-  // CI gates — checks, not interactive flows.
+  // CI gates: checks, not interactive flows.
   if (o.maxTokens != null || o.failOn != null) {
     const failures: string[] = [];
     const used = result.baselineTokens.toLocaleString("en-US");

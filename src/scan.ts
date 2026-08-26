@@ -31,7 +31,7 @@ function presentHeavyPaths(o: ResolvedOptions): HeavyPath[] {
 
 /**
  * Pure scan: detects active agents, reads their persistent context, returns
- * findings + metrics. No printing, no writes — safe to call before/after a fix.
+ * findings + metrics. No printing, no writes, so it is safe to call before/after a fix.
  */
 export function scan(o: ResolvedOptions): ScanResult {
   const findings: Finding[] = [];
@@ -128,7 +128,7 @@ function scanAgent(
         category: "Memory",
         title: `${label}${via}: large (${origTokens.toLocaleString()} tokens)`,
         path: file,
-        detail: "no auto-trimmable redundancy — shorten manually",
+        detail: "no auto-trimmable redundancy; shorten manually",
         tokensPerSession: 0,
         confidence: "high",
         fixable: false,
@@ -137,7 +137,7 @@ function scanAgent(
       });
     }
 
-    // Reworded-duplicate rules — resolved interactively in `fix`.
+    // Reworded-duplicate rules, resolved interactively in `fix`.
     for (const pair of findOverlaps(original)) {
       overlaps.push({ agent: agent.label, path: file, a: pair.a, b: pair.b });
     }
@@ -165,8 +165,8 @@ function scanAgent(
         agent: agent.label,
         category: "Ignore",
         title: content === null
-          ? `${agent.ignoreFile} missing — ${uncovered.length} heavy path(s) unignored`
-          : `${agent.ignoreFile} weak — ${uncovered.length} heavy path(s) unignored`,
+          ? `${agent.ignoreFile} missing, ${uncovered.length} heavy path(s) unignored`
+          : `${agent.ignoreFile} weak, ${uncovered.length} heavy path(s) unignored`,
         path: ignorePath,
         detail: names.join(", "),
         tokensPerSession: heavyTokens,
@@ -203,8 +203,8 @@ function scanAgent(
         title: `${server} (${where})`,
         path: file,
         detail: proven
-          ? `no calls to any ${server} tool — disable to reclaim its tool schemas`
-          : "usage not confirmed — disable only if you know you don't use it",
+          ? `no calls to any ${server} tool; disable to reclaim its tool schemas`
+          : "usage not confirmed; disable only if you know you don't use it",
         ...(proven ? { evidence: `0 calls in ${windowLabel(usage)}` } : {}),
         tokensPerSession: MCP_SERVER_TOKEN_EST,
         confidence: proven ? "high" : "low",
@@ -222,7 +222,7 @@ function scanAgent(
   if (agent.ownsDefinitions) {
     const inv = src.scanDefinitions(o);
 
-    // Unloadable artifacts cost no context — the runtime never reads them.
+    // Unloadable artifacts cost no context, because the runtime never reads them.
     // They are still worth archiving, but as clutter, not as a saving. Rolling
     // them into one finding keeps a directory of stale files from burying the
     // findings that actually cost tokens.
@@ -231,7 +231,7 @@ function scanAgent(
         agent: agent.label,
         category: "Definitions",
         title: `${inv.dead.length} unloadable file(s) in ~/.claude`,
-        detail: src.summarizeReasons(inv.dead) + " — clutter only, no context cost",
+        detail: src.summarizeReasons(inv.dead) + ". Clutter only, no context cost.",
         tokensPerSession: 0,
         confidence: "high",
         fixable: true,
@@ -258,8 +258,8 @@ function scanAgent(
         title: src.displayPath(definition.path, o.path, o.home),
         path: definition.path,
         detail: proven
-          ? `${cost} — never invoked`
-          : `${cost} — remove only if you recognize it as unused`,
+          ? `${cost}, never invoked`
+          : `${cost}; remove only if you recognize it as unused`,
         ...(proven ? { evidence: `0 uses in ${windowLabel(usage)}` } : {}),
         tokensPerSession: definition.tokens,
         confidence: proven ? "high" : "low",

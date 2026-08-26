@@ -68,7 +68,8 @@
     "prepublishOnly": "npm test",
     "start": "node dist/src/index.js",
     "coverage": "npm run clean && tsc && node --test --experimental-test-coverage dist/test/*.test.js",
-    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "lint:dashes": "node -e \"const{execSync}=require('node:child_process');const out=execSync('git ls-files',{encoding:'utf8'}).split('\\n').filter(Boolean).filter(f=>{try{return require('node:fs').readFileSync(f,'utf8').includes('\\u2014')}catch{return false}});if(out.length){console.error('em dash (U+2014) found in:\\n  '+out.join('\\n  '));process.exit(1)}console.log('no em dashes')\""
   },
   "dependencies": {
     "@clack/prompts": "^1.7.0",

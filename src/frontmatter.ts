@@ -2,8 +2,8 @@
  * Minimal YAML front-matter reader.
  *
  * Agents, skills and slash commands are *not* loaded whole into every session.
- * The runtime reads each definition's front matter — its `name` and
- * `description` — so the model knows what exists, and only pulls the body in
+ * The runtime reads each definition's front matter, its `name` and
+ * `description`, so the model knows what exists, and only pulls the body in
  * when the definition is actually invoked. Splitting the two is what lets
  * ctxdiet report a per-session cost that matches reality instead of charging
  * every session for text nobody read.

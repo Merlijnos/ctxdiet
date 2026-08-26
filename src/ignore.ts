@@ -4,7 +4,7 @@
  *
  * The previous check compared strings after stripping a trailing slash, so a
  * perfectly good `.claudeignore` containing `**' + '/node_modules/**` or `node_modules/*`
- * was reported as "weak — heavy paths unignored", and `fix` then appended a
+ * was reported as "weak, heavy paths unignored", and `fix` then appended a
  * redundant block to it. Anything short of real matching produces false
  * positives on the ignore files people actually write.
  *
@@ -112,7 +112,7 @@ export function isIgnored(rules: IgnoreRule[], relPath: string, isDir: boolean):
  *
  * Looser than `isIgnored` on purpose. `node_modules/*` and `node_modules/**`
  * do not ignore the directory entry itself under gitignore rules, but they do
- * exclude everything in it — which is the whole question ctxdiet is asking. So
+ * exclude everything in it, which is the whole question ctxdiet is asking. So
  * a directory counts as covered when either the entry itself or its contents
  * are ignored.
  */

@@ -95,7 +95,7 @@ export interface ScanResult {
   overlaps: Overlap[];
   /** Full persistent context estimate (drives the before/after total row). */
   baselineTokens: number;
-  /** HIGH-confidence savings only — the green headline and the grade. */
+  /** HIGH-confidence savings only: the green headline and the grade. */
   headlineSavings: number;
   /** LOW-confidence potential, reported separately and explicitly unconfirmed. */
   lowConfidencePotential: number;
