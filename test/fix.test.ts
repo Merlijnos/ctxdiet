@@ -156,3 +156,107 @@ test("fix --json without --yes changes nothing", async () => {
   }
   assert.equal(fs.existsSync(path.join(p, ".claudeignore")), false);
 });
+
+// --- usage evidence -------------------------------------------------------
+
+/** A home with enough history for a verdict: github and docx used, others not. */
+function homeWithHistory(): string {
+  const home = tmpdir();
+  const dir = path.join(home, ".claude", "projects", "-repo");
+  fs.mkdirSync(dir, { recursive: true });
+  for (let i = 0; i < 8; i++) {
+    const day = `2026-08-${String(10 + i).padStart(2, "0")}`;
+    const rec = (name: string, input: Record<string, unknown>) =>
+      JSON.stringify({
+        type: "assistant",
+        timestamp: `${day}T10:00:00.000Z`,
+        message: { content: [{ type: "tool_use", name, input }] },
+      });
+    fs.writeFileSync(
+      path.join(dir, `s${i}.jsonl`),
+      [rec("mcp__github__create_pr", {}), rec("Skill", { skill: "docx" })].join("\n") + "\n"
+    );
+  }
+  for (const name of ["docx", "pdf"]) {
+    write(home, `.claude/skills/${name}/SKILL.md`, `---\nname: ${name}\ndescription: The ${name} skill.\n---\n\nbody\n`);
+  }
+  return home;
+}
+
+function mcpProject(): string {
+  const p = tmpdir();
+  write(p, "CLAUDE.md", "# rules\n");
+  write(p, ".mcp.json", JSON.stringify({ mcpServers: { github: { command: "gh" }, Gmail: {} } }, null, 2));
+  return p;
+}
+
+test("a server the history shows in use is not reported as waste", () => {
+  const r = scan(options({ path: mcpProject(), home: homeWithHistory(), usage: true }));
+  const mcp = r.findings.filter((f) => f.category === "MCP").map((f) => f.title);
+  assert.ok(mcp.some((t) => t.startsWith("Gmail")), "unused server reported");
+  assert.ok(!mcp.some((t) => t.startsWith("github")), "used server not reported");
+});
+
+test("evidence promotes a never-used server into the headline", () => {
+  const r = scan(options({ path: mcpProject(), home: homeWithHistory(), usage: true }));
+  const gmail = r.findings.find((f) => f.title.startsWith("Gmail"));
+  assert.ok(gmail);
+  assert.equal(gmail.confidence, "high");
+  assert.match(gmail.evidence ?? "", /0 calls in 8 sessions over 8 days/);
+  assert.ok(r.headlineSavings >= gmail.tokensPerSession);
+});
+
+test("evidence never makes something --yes-applicable on its own", () => {
+  const r = scan(options({ path: mcpProject(), home: homeWithHistory(), usage: true }));
+  const gmail = r.findings.find((f) => f.title.startsWith("Gmail"));
+  assert.equal(gmail?.autoApply, false, "rare use is not no use");
+});
+
+test("--yes leaves an evidence-backed server alone", async () => {
+  const p = mcpProject();
+  await runFix(options({ path: p, home: homeWithHistory(), usage: true, yes: true }));
+  const cfg = JSON.parse(read(path.join(p, ".mcp.json")));
+  assert.ok(cfg.mcpServers.Gmail, "not disabled without --include-unused");
+});
+
+test("--yes --include-unused disables it and keeps the config for restoring", async () => {
+  const p = mcpProject();
+  await runFix(options({ path: p, home: homeWithHistory(), usage: true, yes: true, includeUnused: true }));
+  const cfg = JSON.parse(read(path.join(p, ".mcp.json")));
+  assert.equal(cfg.mcpServers.Gmail, undefined, "disabled");
+  assert.ok(cfg.mcpServers.github, "used server untouched");
+  assert.ok(cfg.mcpServers_disabledByCtxdiet.Gmail, "restorable");
+});
+
+test("--include-unused archives an unused skill and keeps a used one", async () => {
+  const home = homeWithHistory();
+  await runFix(options({ path: mcpProject(), home, usage: true, yes: true, includeUnused: true }));
+  assert.ok(fs.existsSync(path.join(home, ".claude/skills/docx")), "used skill kept");
+  assert.equal(fs.existsSync(path.join(home, ".claude/skills/pdf")), false, "unused skill archived");
+  assert.ok(fs.existsSync(path.join(home, ".claude/.ctxdiet-archive/skills/pdf/SKILL.md")), "recoverable");
+});
+
+test("--no-usage falls back to unconfirmed, never to 'unused'", () => {
+  const r = scan(options({ path: mcpProject(), home: homeWithHistory(), usage: false }));
+  const gmail = r.findings.find((f) => f.title.startsWith("Gmail"));
+  assert.equal(gmail?.confidence, "low");
+  assert.equal(gmail?.evidence, undefined);
+  assert.equal(r.usage.consulted, false);
+});
+
+test("thin history leaves everything unconfirmed", () => {
+  const home = tmpdir();
+  const dir = path.join(home, ".claude", "projects", "-repo");
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(
+    path.join(dir, "s.jsonl"),
+    JSON.stringify({
+      type: "assistant",
+      timestamp: "2026-08-10T10:00:00.000Z",
+      message: { content: [{ type: "tool_use", name: "Bash", input: {} }] },
+    }) + "\n"
+  );
+  const r = scan(options({ path: mcpProject(), home, usage: true }));
+  assert.ok(r.findings.filter((f) => f.category === "MCP").every((f) => f.confidence === "low"));
+  assert.equal(r.usage.conclusive, false);
+});

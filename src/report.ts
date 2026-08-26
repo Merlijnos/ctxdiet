@@ -3,7 +3,7 @@ import pc from "picocolors";
 
 import { monthlyCost } from "./pricing.js";
 import { shortenPath } from "./sources.js";
-import type { Finding, ResolvedOptions, ScanResult } from "./types.js";
+import type { Finding, ResolvedOptions, ScanResult, UsageSummary } from "./types.js";
 
 /**
  * Bumped on any breaking change to --json. Consumers pin on it; the CI gate and
@@ -37,7 +37,7 @@ export function printScanResult(r: ScanResult, o: ResolvedOptions): void {
       "No agent setup detected. Supported: Claude Code, Codex/AGENTS.md, " +
         "Cursor, Gemini CLI, Windsurf, GitHub Copilot."
     );
-    methodNote(o);
+    methodNote(o, r.usage);
     return;
   }
 
@@ -59,8 +59,9 @@ export function printScanResult(r: ScanResult, o: ResolvedOptions): void {
           f.tokensPerSession > 0
             ? pc.green(`-${fmt(f.tokensPerSession)} tok`)
             : pc.dim("review");
+        const proof = f.evidence ? `\n  ${pc.yellow("evidence: " + f.evidence)}` : "";
         const why = f.detail ? `\n  ${pc.dim(f.detail)}` : "";
-        return `${pc.cyan(f.agent)} · ${f.title}  ${save}${why}`;
+        return `${pc.cyan(f.agent)} · ${f.title}  ${save}${why}${proof}`;
       })
       .join("\n\n");
     note(body, "Fixable waste");
@@ -87,10 +88,10 @@ export function printScanResult(r: ScanResult, o: ResolvedOptions): void {
     );
   }
 
-  methodNote(o);
+  methodNote(o, r.usage);
 }
 
-function methodNote(o: ResolvedOptions): void {
+function methodNote(o: ResolvedOptions, usage?: UsageSummary): void {
   const modelNote = o.modelDetected ? " (from your Claude config)" : "";
   log.message(
     pc.dim(
@@ -98,6 +99,17 @@ function methodNote(o: ResolvedOptions): void {
         `Pricing ${o.model}${modelNote}, ${o.sessionsPerMonth} sessions/mo.`
     )
   );
+  if (usage === undefined) return;
+  log.message(pc.dim(usageNote(usage)));
+}
+
+/** One line explaining how much the "never used" claims are worth. */
+function usageNote(u: UsageSummary): string {
+  if (!u.consulted) return `Usage evidence: off${u.note ? ` (${u.note})` : ""}.`;
+  const window = `${u.sessions} session${u.sessions === 1 ? "" : "s"} over ${u.days} day${u.days === 1 ? "" : "s"}`;
+  return u.conclusive
+    ? `Usage evidence: read ${window} of local history — never uploaded.`
+    : `Usage evidence: only ${window} of history, too little to call anything unused yet.`;
 }
 
 export function printBeforeAfter(
@@ -138,6 +150,7 @@ export function toJson(r: ScanResult) {
     sessionsPerMonth: options.sessionsPerMonth,
     method: "GPT-4 tokenizer for files, size estimate for dirs — offline; not a billing figure",
     detectedAgents: r.detectedAgents,
+    usage: r.usage,
     grade: r.grade,
     baselineTokens: r.baselineTokens,
     headlineSavingsTokens: r.headlineSavings,
@@ -157,6 +170,8 @@ export function toJson(r: ScanResult) {
       confidence: f.confidence,
       fixable: f.fixable,
       manualReview: f.manualReview ?? false,
+      autoApply: f.autoApply,
+      evidence: f.evidence ?? null,
     })),
   };
 }

@@ -25,6 +25,8 @@ export function options(over: Partial<ResolvedOptions> = {}): ResolvedOptions {
     modelDetected: false,
     maxTokens: null,
     failOn: null,
+    usage: false,
+    includeUnused: false,
     json: true,
     dryRun: false,
     yes: false,
