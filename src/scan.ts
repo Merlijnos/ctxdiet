@@ -168,29 +168,34 @@ function scanAgent(
   // --- Definition inventory (Claude-style ~/.claude only) ---
   if (agent.ownsDefinitions) {
     const inv = src.scanDefinitions(o);
-    for (const dead of inv.dead) {
-      baseline += dead.tokens;
+
+    // Unloadable artifacts cost no context — the runtime never reads them.
+    // They are still worth archiving, but as clutter, not as a saving. Rolling
+    // them into one finding keeps a directory of stale files from burying the
+    // findings that actually cost tokens.
+    if (inv.dead.length > 0) {
       findings.push({
         agent: agent.label,
         category: "Definitions",
-        title: `${src.displayPath(dead.path, o.path, o.home)} — ${dead.reason}`,
-        tokensPerSession: dead.tokens,
+        title: `${inv.dead.length} unloadable file(s) in ~/.claude`,
+        detail: src.summarizeReasons(inv.dead) + " — clutter only, no context cost",
+        tokensPerSession: 0,
         confidence: "high",
         fixable: true,
-        action: {
-          type: "archive",
-          path: dead.path,
-          archiveTo: src.archivePathFor(dead.path, o.home),
-        },
+        action: { type: "archive-many", paths: inv.dead.map((d) => d.path), home: o.home },
       });
     }
+
     for (const real of inv.real) {
       baseline += real.tokens;
       findings.push({
         agent: agent.label,
         category: "Definitions",
         title: src.displayPath(real.path, o.path, o.home),
-        detail: "usage not confirmed — remove only if you recognize it as unused",
+        detail:
+          `${real.tokens.toLocaleString()} tok of description loaded every session ` +
+          `(+${real.onDemandTokens.toLocaleString()} only when invoked) — ` +
+          `remove only if you recognize it as unused`,
         tokensPerSession: real.tokens,
         confidence: "low",
         fixable: true,

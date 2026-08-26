@@ -8,7 +8,7 @@ import pc from "picocolors";
 import { applyOverlapResolution, type ResolveChoice } from "./overlap.js";
 import { printBeforeAfter } from "./report.js";
 import { scan } from "./scan.js";
-import { displayPath, readFileSafe } from "./sources.js";
+import { archivePathFor, displayPath, readFileSafe } from "./sources.js";
 import { trimMarkdown } from "./trim.js";
 import type { Finding, FixAction, Overlap, ResolvedOptions } from "./types.js";
 
@@ -19,6 +19,7 @@ import type { Finding, FixAction, Overlap, ResolvedOptions } from "./types.js";
 type Change =
   | { kind: "write"; path: string; after: string; isNew: boolean }
   | { kind: "move"; path: string; to: string }
+  | { kind: "move-many"; moves: Array<{ path: string; to: string }> }
   | { kind: "mcp"; path: string; after: string; server: string };
 
 function buildChange(action: FixAction): Change | null {
@@ -44,6 +45,12 @@ function buildChange(action: FixAction): Change | null {
     }
     case "archive":
       return { kind: "move", path: action.path, to: action.archiveTo };
+    case "archive-many": {
+      const moves = action.paths
+        .filter((p) => fs.existsSync(p))
+        .map((p) => ({ path: p, to: archivePathFor(p, action.home) }));
+      return moves.length === 0 ? null : { kind: "move-many", moves };
+    }
   }
 }
 
@@ -65,16 +72,23 @@ function disableMcpServer(content: string, server: string): string | null {
 
 /** One-line, human summary of a change — no raw diff. */
 function summarize(f: Finding, change: Change, o: ResolvedOptions): string {
-  const where = displayPath(change.path, o.path, o.home);
+  const here = (p: string) => displayPath(p, o.path, o.home);
   switch (change.kind) {
     case "move":
-      return `Archive ${where} ${pc.dim("(" + (f.detail ?? f.title) + ")")}`;
+      return `Archive ${here(change.path)} ${pc.dim("(" + (f.detail ?? f.title) + ")")}`;
+    case "move-many":
+      return (
+        `Archive ${change.moves.length} file(s) ${pc.dim("(" + (f.detail ?? f.title) + ")")}\n` +
+        change.moves.map((m) => pc.dim("    " + here(m.path))).join("\n")
+      );
     case "mcp":
-      return `Disable MCP server ${pc.bold(change.server)} in ${where}`;
+      return `Disable MCP server ${pc.bold(change.server)} in ${here(change.path)}`;
     case "write":
-      if (change.isNew) return `Create ${where} ${pc.dim("— ignore " + (f.detail ?? "heavy paths"))}`;
-      if (f.category === "Ignore") return `Update ${where} ${pc.dim("— add ignore patterns")}`;
-      return `Trim ${where} ${pc.green("-" + f.tokensPerSession + " tok")} ${pc.dim("(" + (f.detail ?? "") + ")")}`;
+      if (change.isNew)
+        return `Create ${here(change.path)} ${pc.dim("— ignore " + (f.detail ?? "heavy paths"))}`;
+      if (f.category === "Ignore")
+        return `Update ${here(change.path)} ${pc.dim("— add ignore patterns")}`;
+      return `Trim ${here(change.path)} ${pc.green("-" + f.tokensPerSession + " tok")} ${pc.dim("(" + (f.detail ?? "") + ")")}`;
   }
 }
 
@@ -89,15 +103,23 @@ function backup(p: string): void {
   fs.copyFileSync(p, bak);
 }
 
+function archive(from: string, to: string): void {
+  fs.mkdirSync(path.dirname(to), { recursive: true });
+  try {
+    fs.renameSync(from, to);
+  } catch {
+    fs.cpSync(from, to, { recursive: true });
+    fs.rmSync(from, { recursive: true, force: true });
+  }
+}
+
 function applyChange(change: Change): void {
   if (change.kind === "move") {
-    fs.mkdirSync(path.dirname(change.to), { recursive: true });
-    try {
-      fs.renameSync(change.path, change.to);
-    } catch {
-      fs.cpSync(change.path, change.to, { recursive: true });
-      fs.rmSync(change.path, { recursive: true, force: true });
-    }
+    archive(change.path, change.to);
+    return;
+  }
+  if (change.kind === "move-many") {
+    for (const m of change.moves) archive(m.path, m.to);
     return;
   }
   const isNewFile = change.kind === "write" && change.isNew;

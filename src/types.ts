@@ -26,7 +26,8 @@ export type FixAction =
   | { type: "ignore-create"; path: string; content: string }
   | { type: "ignore-augment"; path: string; added: string[] }
   | { type: "mcp-disable"; path: string; server: string }
-  | { type: "archive"; path: string; archiveTo: string };
+  | { type: "archive"; path: string; archiveTo: string }
+  | { type: "archive-many"; paths: string[]; home: string };
 
 export interface Finding {
   /** Human label of the agent this finding belongs to, e.g. "Claude Code". */

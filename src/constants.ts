@@ -14,6 +14,12 @@ export const HEAVY_PATH_TOKEN_CAP = 5000;
 export const HEAVY_WALK_MAX_FILES = 2000;
 export const HEAVY_WALK_MAX_BYTES = 8 * 1024 * 1024;
 
+/** How deep to look for skill folders under a skills/ root (plugins nest them). */
+export const DEFINITION_MAX_DEPTH = 4;
+
+/** Ceiling on a single reported item, so one huge tree can't dwarf the report. */
+export const DEFINITION_TOKEN_CAP = 20000;
+
 /** A CLAUDE.md above this with no trimmable redundancy is flagged for manual review. */
 export const LARGE_CLAUDEMD_TOKENS = 3000;
 
