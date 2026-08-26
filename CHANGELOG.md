@@ -45,7 +45,7 @@ already on disk.
 
 - Findings carry `autoApply` separately from `confidence`, so "we are sure this
   is unused" and "this is safe to change unattended" stop being the same field.
-- 89 tests, up from 72.
+- 98 tests, up from 72, covering the usage engine and the MCP wire protocol.
 
 ## [0.4.0]
 
