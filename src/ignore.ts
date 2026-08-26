@@ -18,7 +18,10 @@ export interface IgnoreRule {
   source: string;
   negated: boolean;
   dirOnly: boolean;
-  re: RegExp;
+  /** Matches the path the pattern names. */
+  selfRe: RegExp;
+  /** Matches anything beneath that path. */
+  descendantRe: RegExp;
 }
 
 /** Escape everything the pattern language does not give meaning to. */
@@ -26,7 +29,7 @@ function escapeLiteral(ch: string): string {
   return /[.+^${}()|[\]\\]/.test(ch) ? "\\" + ch : ch;
 }
 
-function toRegExp(pattern: string, anchored: boolean): RegExp {
+function toRegExp(pattern: string, anchored: boolean): { selfRe: RegExp; descendantRe: RegExp } {
   let out = "";
   for (let i = 0; i < pattern.length; i++) {
     const ch = pattern[i]!;
@@ -55,8 +58,10 @@ function toRegExp(pattern: string, anchored: boolean): RegExp {
   }
   // An unanchored pattern may match at any depth.
   const prefix = anchored ? "^" : "^(?:.*/)?";
-  // Matching a directory implies matching everything beneath it.
-  return new RegExp(`${prefix}${out}(?:/.*)?$`);
+  return {
+    selfRe: new RegExp(`${prefix}${out}$`),
+    descendantRe: new RegExp(`${prefix}${out}/.+$`),
+  };
 }
 
 export function parseIgnoreRules(content: string): IgnoreRule[] {
@@ -79,7 +84,7 @@ export function parseIgnoreRules(content: string): IgnoreRule[] {
     if (line.startsWith("/")) line = line.slice(1);
     if (line === "") continue;
 
-    rules.push({ source: raw.trim(), negated, dirOnly, re: toRegExp(line, anchored) });
+    rules.push({ source: raw.trim(), negated, dirOnly, ...toRegExp(line, anchored) });
   }
   return rules;
 }
@@ -92,8 +97,11 @@ export function isIgnored(rules: IgnoreRule[], relPath: string, isDir: boolean):
   const p = relPath.replace(/^\.\//, "").replace(/\/$/, "");
   let ignored = false;
   for (const rule of rules) {
-    if (rule.dirOnly && !isDir) continue;
-    if (!rule.re.test(p)) continue;
+    // Everything under an ignored directory is ignored, whatever it is; the
+    // directory-only restriction applies to the named path itself.
+    const hit =
+      rule.descendantRe.test(p) || (rule.selfRe.test(p) && (!rule.dirOnly || isDir));
+    if (!hit) continue;
     ignored = !rule.negated;
   }
   return ignored;

@@ -17,7 +17,20 @@ import { MEMORY_IMPORT_MAX_DEPTH } from "./constants.js";
  * expanded, `~` resolves against the home directory, relative paths resolve
  * against the importing file, and a cycle stops rather than recursing forever.
  */
-const IMPORT = /(^|\s)@((?:[~./][^\s`]*)|(?:[A-Za-z0-9_.-]+\/[^\s`]*))/g;
+const IMPORT = /(?:^|\s)@([^\s`]+)/g;
+
+/** Sentence punctuation that follows an import rather than belonging to it. */
+const TRAILING = /[.,;:!?)\]}'"]+$/;
+
+/**
+ * An `@` token is an import only if it looks like a path: it names a directory
+ * component, starts at `~` or `.`, or carries a file extension. That keeps
+ * `@mentions` and prose out, while `user@example.com` is already excluded by
+ * the leading-whitespace requirement.
+ */
+function looksLikePath(spec: string): boolean {
+  return spec.includes("/") || spec.startsWith("~") || /\.[A-Za-z0-9_-]+$/.test(spec);
+}
 
 export interface ImportedFile {
   path: string;
@@ -43,8 +56,10 @@ export function parseImports(content: string): string[] {
     // Drop inline code spans before looking for imports.
     const line = raw.replace(/`[^`]*`/g, "");
     for (const m of line.matchAll(IMPORT)) {
-      const spec = m[2];
-      if (spec !== undefined) out.push(spec);
+      const raw = m[1];
+      if (raw === undefined) continue;
+      const spec = raw.replace(TRAILING, "");
+      if (spec !== "" && looksLikePath(spec)) out.push(spec);
     }
   }
   return out;
