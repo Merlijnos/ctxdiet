@@ -1,4 +1,6 @@
-import { CHARS_PER_TOKEN } from "./constants";
+import { createRequire } from "node:module";
+
+import { CHARS_PER_TOKEN } from "./constants.js";
 
 // Real BPE tokenizer (gpt-tokenizer, pure-JS, offline) for accurate counts on
 // text files. Loaded lazily so startup stays fast; falls back to chars/4 if it
@@ -11,9 +13,12 @@ function loadEncoder(): ((s: string) => number) | null {
   if (encoderLoaded) return encoder;
   encoderLoaded = true;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const gpt = require("gpt-tokenizer") as { encode(s: string): number[] };
-    encoder = (s: string) => gpt.encode(s).length;
+    // Loaded through createRequire rather than a static import: the BPE ranks
+    // table costs ~150ms to parse, and `--help`, `--version` and clean repos
+    // should never pay for it.
+    const req = createRequire(import.meta.url);
+    const gpt = req("gpt-tokenizer") as { countTokens(s: string): number };
+    encoder = (s: string) => gpt.countTokens(s);
   } catch {
     encoder = null;
   }

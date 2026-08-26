@@ -2,12 +2,16 @@ import fs from "node:fs";
 import path from "node:path";
 
 import {
+  DEFINITION_MAX_DEPTH,
+  DEFINITION_TOKEN_CAP,
   HEAVY_PATH_TOKEN_CAP,
   HEAVY_WALK_MAX_BYTES,
   HEAVY_WALK_MAX_FILES,
-} from "./constants";
-import { estimateTokens, estimateTokensFromBytes } from "./tokens";
-import { Model, ResolvedOptions } from "./types";
+} from "./constants.js";
+import { parseFrontmatter } from "./frontmatter.js";
+import { covers, parseIgnoreRules } from "./ignore.js";
+import { estimateTokens, estimateTokensFromBytes } from "./tokens.js";
+import type { Model, ResolvedOptions } from "./types.js";
 
 // ---------------------------------------------------------------------------
 // fs helpers
@@ -77,7 +81,7 @@ export function detectModel(home: string): Model | null {
     } catch {
       continue;
     }
-    const raw = (json as Record<string, unknown>)?.model;
+    const raw = (json as Record<string, unknown>)?.["model"];
     const value = typeof raw === "string" ? raw.toLowerCase() : "";
     if (value.includes("opus")) return "opus";
     if (value.includes("haiku")) return "haiku";
@@ -86,9 +90,16 @@ export function detectModel(home: string): Model | null {
   return null;
 }
 
-/** Recursively list files under `dir` whose name ends with one of `exts`. */
+/**
+ * Recursively list files under `dir` whose name ends with one of `exts`.
+ *
+ * Prunes the heavy directories on the way down. Without that, looking for a
+ * nested AGENTS.md walks straight into node_modules and reports a dependency's
+ * instruction file as part of the user's context.
+ */
 export function walkFiles(dir: string, exts: string[]): string[] {
   if (!isDir(dir)) return [];
+  const skip = new Set<string>(HEAVY_DIRS);
   const out: string[] = [];
   const stack = [dir];
   while (stack.length && out.length < HEAVY_WALK_MAX_FILES) {
@@ -102,6 +113,7 @@ export function walkFiles(dir: string, exts: string[]): string[] {
     for (const e of entries) {
       const full = path.join(cur, e.name);
       if (e.isDirectory()) {
+        if (skip.has(e.name) || e.name === ".git") continue;
         stack.push(full);
       } else if (e.isFile() && exts.some((x) => e.name.endsWith(x))) {
         out.push(full);
@@ -144,16 +156,18 @@ export const DEFAULT_IGNORE_PATTERNS = [
   ".env", ".env.*", ".DS_Store", ".git/",
 ];
 
-export function parseIgnore(content: string): string[] {
-  return content
-    .split("\n")
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0 && !l.startsWith("#"));
-}
-
-export function ignoreCovers(patterns: string[], name: string): boolean {
-  const norm = patterns.map((p) => p.replace(/^\.\//, "").replace(/\/$/, ""));
-  return norm.includes(name) || norm.includes("/" + name);
+/** Patterns an existing ignore file is still missing, in DEFAULT order. */
+export function missingDefaultPatterns(content: string): string[] {
+  const rules = parseIgnoreRules(content);
+  return DEFAULT_IGNORE_PATTERNS.filter((pattern) => {
+    const isDir = pattern.endsWith("/");
+    const name = isDir ? pattern.slice(0, -1) : pattern;
+    // A pattern is missing only if the file does not already cover it. Glob
+    // defaults like `*.min.js` have no single path to test, so compare them
+    // literally against what is already there.
+    if (/[*?[]/.test(name)) return !rules.some((r) => r.source === pattern);
+    return !covers(rules, name, isDir);
+  });
 }
 
 function walkBytes(dir: string): number {
@@ -215,7 +229,7 @@ export function readMcpServers(file: string): string[] {
   } catch {
     return []; // malformed JSON — skip rather than guess
   }
-  const servers = (json as Record<string, unknown>)?.mcpServers;
+  const servers = (json as Record<string, unknown>)?.["mcpServers"];
   if (servers && typeof servers === "object") {
     return Object.keys(servers as Record<string, unknown>);
   }
@@ -232,33 +246,58 @@ const JUNK_NAMES = new Set([".DS_Store", "Thumbs.db"]);
 export interface DefRef {
   path: string;
   reason: string;
+  /**
+   * Tokens this definition injects into EVERY session — its front-matter
+   * name/description. Zero for artifacts the runtime cannot load at all.
+   */
   tokens: number;
+  /** Tokens read only when the definition is actually invoked. */
+  onDemandTokens: number;
 }
 
 export interface DefInventory {
-  /** HIGH-confidence, provably-dead artifacts (safe to archive). */
+  /**
+   * HIGH-confidence, provably-dead artifacts: unloadable, so they cost no
+   * context — clutter to archive, never a per-session saving.
+   */
   dead: DefRef[];
-  /** LOW-confidence real definitions (usage unconfirmed — review only). */
+  /** LOW-confidence live definitions whose descriptions do load every session. */
   real: DefRef[];
 }
 
-function dirTokens(dir: string): number {
-  return estimateTokensFromBytes(walkBytes(dir));
+const cap = (n: number) => Math.min(n, DEFINITION_TOKEN_CAP);
+
+/**
+ * Split a definition file into what every session pays for (front matter) and
+ * what it only pays for on invocation (the body).
+ */
+function definitionTokens(file: string): { always: number; onDemand: number } {
+  const fm = parseFrontmatter(readFileSafe(file));
+  return {
+    always: cap(estimateTokens(fm.block)),
+    onDemand: cap(estimateTokens(fm.body)),
+  };
 }
 
 export function scanDefinitions(o: ResolvedOptions): DefInventory {
   const dead: DefRef[] = [];
   const real: DefRef[] = [];
-  const roots: Array<["agents" | "commands" | "skills", string]> = [
-    ["agents", path.join(o.home, ".claude", "agents")],
-    ["commands", path.join(o.home, ".claude", "commands")],
-    ["skills", path.join(o.home, ".claude", "skills")],
-  ];
+  // Definitions live at both scopes and both are loaded. Only the home dir was
+  // ever scanned, so a repo checking its subagents and slash commands into
+  // .claude/ had that context counted as free.
+  const bases = uniq([path.join(o.home, ".claude"), path.join(o.path, ".claude")]);
+  const roots: Array<["agents" | "commands" | "skills", string]> = bases.flatMap(
+    (base) => [
+      ["agents", path.join(base, "agents")],
+      ["commands", path.join(base, "commands")],
+      ["skills", path.join(base, "skills")],
+    ] as Array<["agents" | "commands" | "skills", string]>
+  );
 
   for (const [kind, root] of roots) {
     if (!isDir(root)) continue;
     if (kind === "skills") {
-      scanSkillRoot(root, dead, real);
+      scanSkillRoot(root, dead, real, 0);
     } else {
       scanFlatRoot(root, dead, real);
     }
@@ -290,8 +329,27 @@ function scanFlatRoot(root: string, dead: DefRef[], real: DefRef[]): void {
   }
 }
 
-/** skills/ holds one folder per skill, each requiring a SKILL.md. */
-function scanSkillRoot(root: string, dead: DefRef[], real: DefRef[]): void {
+/** True if `dir` is, or contains at some depth, a loadable skill. */
+function holdsSkill(dir: string, depth: number): boolean {
+  if (depth > DEFINITION_MAX_DEPTH) return false;
+  if (isFile(path.join(dir, "SKILL.md"))) return true;
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return false;
+  }
+  return entries.some((e) => e.isDirectory() && holdsSkill(path.join(dir, e.name), depth + 1));
+}
+
+/**
+ * skills/ holds one folder per skill — but plugin and sync layouts group them
+ * one or more levels deeper (skills/synced/<plugin>/SKILL.md). Recurse through
+ * grouping folders instead of declaring them broken: calling a populated tree
+ * "missing SKILL.md" both invented an enormous phantom saving and offered to
+ * archive every skill under it.
+ */
+function scanSkillRoot(root: string, dead: DefRef[], real: DefRef[], depth: number): void {
   let entries: fs.Dirent[];
   try {
     entries = fs.readdirSync(root, { withFileTypes: true });
@@ -305,19 +363,22 @@ function scanSkillRoot(root: string, dead: DefRef[], real: DefRef[]): void {
       continue;
     }
     if (!e.isDirectory()) continue;
+
     const skillMd = path.join(full, "SKILL.md");
-    if (!isFile(skillMd)) {
-      dead.push({
-        path: full,
-        reason: "skill folder missing SKILL.md (cannot load)",
-        tokens: dirTokens(full),
-      });
+    if (isFile(skillMd)) {
+      const { always, onDemand } = definitionTokens(skillMd);
+      real.push({ path: full, reason: "skill", tokens: always, onDemandTokens: onDemand });
       continue;
     }
-    real.push({
+    if (depth < DEFINITION_MAX_DEPTH && holdsSkill(full, depth + 1)) {
+      scanSkillRoot(full, dead, real, depth + 1); // grouping folder, not a skill
+      continue;
+    }
+    dead.push({
       path: full,
-      reason: "skill",
-      tokens: estimateTokens(readFileSafe(skillMd)),
+      reason: "skill folder with no SKILL.md (cannot load)",
+      tokens: 0,
+      onDemandTokens: cap(estimateTokensFromBytes(walkBytes(full))),
     });
   }
 }
@@ -332,22 +393,41 @@ function classifyFile(
     dead.push({
       path: full,
       reason: "backup/temp artifact",
-      tokens: estimateTokens(readFileSafe(full)),
+      tokens: 0,
+      onDemandTokens: cap(estimateTokens(readFileSafe(full))),
     });
     return;
   }
+  if (!name.toLowerCase().endsWith(".md")) return;
+
   const content = readFileSafe(full);
   if (content.trim() === "") {
-    dead.push({ path: full, reason: "empty definition file", tokens: 0 });
+    dead.push({ path: full, reason: "empty definition file", tokens: 0, onDemandTokens: 0 });
     return;
   }
-  if (name.toLowerCase().endsWith(".md")) {
-    real.push({ path: full, reason: "definition", tokens: estimateTokens(content) });
-  }
+  const { always, onDemand } = definitionTokens(full);
+  real.push({ path: full, reason: "definition", tokens: always, onDemandTokens: onDemand });
 }
 
+/** "3 backup/temp artifacts, 1 empty definition file" — grouped reasons. */
+export function summarizeReasons(refs: DefRef[]): string {
+  const counts = new Map<string, number>();
+  for (const r of refs) counts.set(r.reason, (counts.get(r.reason) ?? 0) + 1);
+  return [...counts]
+    .sort((a, b) => b[1] - a[1])
+    .map(([reason, n]) => `${n} ${reason}`)
+    .join(", ");
+}
+
+/**
+ * Where an archived definition goes. Archives stay inside the .claude dir the
+ * file came from, so a project's definitions are never quietly relocated into
+ * the user's home directory.
+ */
 export function archivePathFor(p: string, home: string): string {
-  const base = path.join(home, ".claude");
-  const rel = p.startsWith(base) ? path.relative(base, p) : path.basename(p);
-  return path.join(home, ".claude", ".ctxdiet-archive", rel);
+  const marker = `${path.sep}.claude${path.sep}`;
+  const at = p.lastIndexOf(marker);
+  const base = at >= 0 ? p.slice(0, at + marker.length - 1) : path.join(home, ".claude");
+  const rel = p.startsWith(base + path.sep) ? path.relative(base, p) : path.basename(p);
+  return path.join(base, ".ctxdiet-archive", rel);
 }

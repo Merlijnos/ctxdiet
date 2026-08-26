@@ -1,7 +1,7 @@
 {
   "name": "ctxdiet",
-  "version": "0.3.0",
-  "description": "Detect, fix, and measure AI coding-agent context-token waste across Claude Code, Codex, Cursor, Gemini, Windsurf & Copilot. Other tools report waste — ctxdiet fixes it.",
+  "version": "0.4.0",
+  "description": "Detect, fix, and measure AI coding-agent context-token waste across Claude Code, Codex, Cursor, Gemini, Windsurf, Copilot, Cline, Roo & more. Other tools report waste \u2014 ctxdiet fixes it.",
   "keywords": [
     "claude",
     "claude-code",
@@ -21,7 +21,14 @@
     "ai-agents",
     "cursorrules",
     "cli",
-    "ai"
+    "ai",
+    "cline",
+    "roo-code",
+    "aider",
+    "zed",
+    "junie",
+    "agent-rules",
+    "context-engineering"
   ],
   "license": "MIT",
   "author": "Merlijn de Groot <merlijndegroot498@gmail.com>",
@@ -34,34 +41,38 @@
     "url": "https://github.com/Merlijnos/ctxdiet/issues"
   },
   "funding": "https://github.com/sponsors/Merlijnos",
-  "type": "commonjs",
+  "type": "module",
   "bin": {
     "ctxdiet": "dist/src/index.js",
     "slimclaude": "dist/src/index.js"
   },
   "files": [
     "dist/src",
+    "CHANGELOG.md",
     "README.md",
     "LICENSE"
   ],
   "engines": {
-    "node": ">=20"
+    "node": ">=22.12.0"
   },
   "scripts": {
     "build": "tsc",
+    "typecheck": "tsc --noEmit",
     "prepare": "tsc",
-    "test": "tsc && node --test dist/test/*.test.js",
+    "test": "npm run clean && tsc && node --test dist/test/*.test.js",
     "prepublishOnly": "npm test",
-    "start": "node dist/src/index.js"
+    "start": "node dist/src/index.js",
+    "coverage": "npm run clean && tsc && node --test --experimental-test-coverage dist/test/*.test.js",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
   },
   "dependencies": {
-    "@clack/prompts": "^1.6.0",
-    "commander": "^12.1.0",
-    "gpt-tokenizer": "^2.9.0",
+    "@clack/prompts": "^1.7.0",
+    "commander": "^15.0.0",
+    "gpt-tokenizer": "^4.0.0",
     "picocolors": "^1.1.1"
   },
   "devDependencies": {
-    "@types/node": "^20.14.0",
-    "typescript": "^5.5.0"
+    "@types/node": "^26.3.0",
+    "typescript": "^7.0.2"
   }
 }

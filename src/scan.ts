@@ -1,16 +1,19 @@
 import path from "node:path";
 
-import { AgentDef, detectAgents } from "./agents";
-import { grade, LARGE_CLAUDEMD_TOKENS, MCP_SERVER_TOKEN_EST } from "./constants";
-import { findOverlaps } from "./overlap";
-import * as src from "./sources";
-import { estimateTokens } from "./tokens";
-import { trimMarkdown } from "./trim";
-import { Finding, Overlap, ResolvedOptions, ScanResult } from "./types";
+import { detectAgents, type AgentDef } from "./agents.js";
+import { grade, LARGE_CLAUDEMD_TOKENS, MCP_SERVER_TOKEN_EST } from "./constants.js";
+import { covers, parseIgnoreRules } from "./ignore.js";
+import { resolveImports } from "./imports.js";
+import { findOverlaps } from "./overlap.js";
+import * as src from "./sources.js";
+import { estimateTokens } from "./tokens.js";
+import { trimMarkdown } from "./trim.js";
+import type { Finding, Overlap, ResolvedOptions, ScanResult } from "./types.js";
 
 interface HeavyPath {
   name: string;
   tokens: number;
+  isDir: boolean;
 }
 
 /** Heavy dirs/files present in the project, sized once and reused per agent. */
@@ -18,8 +21,9 @@ function presentHeavyPaths(o: ResolvedOptions): HeavyPath[] {
   const out: HeavyPath[] = [];
   for (const name of [...src.HEAVY_DIRS, ...src.HEAVY_FILES]) {
     const full = path.join(o.path, name);
-    if (!src.isFile(full) && !src.isDir(full)) continue;
-    out.push({ name, tokens: src.estimatePathTokens(full) });
+    const dir = src.isDir(full);
+    if (!dir && !src.isFile(full)) continue;
+    out.push({ name, tokens: src.estimatePathTokens(full), isDir: dir });
   }
   return out;
 }
@@ -70,8 +74,22 @@ function scanAgent(
   let baseline = 0;
 
   // --- Memory / instruction files (HIGH-confidence, auto-trimmable) ---
-  for (const file of agent.memoryFiles(o)) {
-    if (!src.isFile(file)) continue;
+  // A memory file may pull in others with @imports; the whole tree is loaded
+  // every session, so the whole tree is scanned and trimmed.
+  const seen = new Set<string>();
+  const queue = agent.memoryFiles(o).map((file) => ({ file, imported: false }));
+
+  for (let i = 0; i < queue.length; i++) {
+    const entry = queue[i];
+    if (entry === undefined) continue;
+    const { file, imported } = entry;
+    if (seen.has(file) || !src.isFile(file)) continue;
+    seen.add(file);
+
+    for (const dep of resolveImports(file, src.readFileSafe, o.home)) {
+      if (!seen.has(dep.path)) queue.push({ file: dep.path, imported: true });
+    }
+
     const original = src.readFileSafe(file);
     const origTokens = estimateTokens(original);
     baseline += origTokens;
@@ -79,12 +97,14 @@ function scanAgent(
     const trimmed = trimMarkdown(original);
     const saved = origTokens - estimateTokens(trimmed);
     const label = src.displayPath(file, o.path, o.home);
+    const via = imported ? " (imported)" : "";
 
     if (saved > 0) {
       findings.push({
         agent: agent.label,
         category: "Memory",
-        title: `${label}: ${saved.toLocaleString()} redundant tokens`,
+        title: `${label}${via}: ${saved.toLocaleString()} redundant tokens`,
+        path: file,
         detail: "duplicate lines, blank runs, trailing whitespace",
         tokensPerSession: saved,
         confidence: "high",
@@ -95,7 +115,8 @@ function scanAgent(
       findings.push({
         agent: agent.label,
         category: "Memory",
-        title: `${label}: large (${origTokens.toLocaleString()} tokens)`,
+        title: `${label}${via}: large (${origTokens.toLocaleString()} tokens)`,
+        path: file,
         detail: "no auto-trimmable redundancy — shorten manually",
         tokensPerSession: 0,
         confidence: "high",
@@ -113,24 +134,28 @@ function scanAgent(
   // --- Ignore file (HIGH-confidence, auto-fixable) ---
   if (agent.ignoreFile && heavy.length > 0) {
     const ignorePath = path.join(o.path, agent.ignoreFile);
-    const ignoreExists = src.isFile(ignorePath);
-    const content = ignoreExists ? src.readFileSafe(ignorePath) : null;
-    const patterns = content ? src.parseIgnore(content) : [];
-    const uncovered = heavy.filter((h) => !src.ignoreCovers(patterns, h.name));
+    const content = src.isFile(ignorePath) ? src.readFileSafe(ignorePath) : null;
+    const rules = parseIgnoreRules(content ?? "");
+    const uncovered = heavy.filter((h) => !covers(rules, h.name, h.isDir));
     const heavyTokens = uncovered.reduce((s, h) => s + h.tokens, 0);
 
     if (uncovered.length > 0) {
       baseline += heavyTokens;
       const names = uncovered.map((h) => h.name);
-      const missingDefaults = src.DEFAULT_IGNORE_PATTERNS.filter(
-        (p) => !patterns.includes(p)
-      );
+      // Whatever we add has to actually cover what was found, or the same
+      // finding comes back on the next run. Start from the uncovered paths,
+      // then top up with any defaults the file is still missing.
+      const added = src.uniq([
+        ...uncovered.map((h) => (h.isDir ? `${h.name}/` : h.name)),
+        ...src.missingDefaultPatterns(content ?? ""),
+      ]);
       findings.push({
         agent: agent.label,
         category: "Ignore",
         title: content === null
           ? `${agent.ignoreFile} missing — ${uncovered.length} heavy path(s) unignored`
           : `${agent.ignoreFile} weak — ${uncovered.length} heavy path(s) unignored`,
+        path: ignorePath,
         detail: names.join(", "),
         tokensPerSession: heavyTokens,
         confidence: "high",
@@ -142,7 +167,7 @@ function scanAgent(
                 path: ignorePath,
                 content: src.DEFAULT_IGNORE_PATTERNS.join("\n") + "\n",
               }
-            : { type: "ignore-augment", path: ignorePath, added: missingDefaults },
+            : { type: "ignore-augment", path: ignorePath, added },
       });
     }
   }
@@ -155,6 +180,7 @@ function scanAgent(
         agent: agent.label,
         category: "MCP",
         title: `${server} (${src.displayPath(file, o.path, o.home)})`,
+        path: file,
         detail: "usage not confirmed — disable only if you know you don't use it",
         tokensPerSession: MCP_SERVER_TOKEN_EST,
         confidence: "low",
@@ -168,29 +194,35 @@ function scanAgent(
   // --- Definition inventory (Claude-style ~/.claude only) ---
   if (agent.ownsDefinitions) {
     const inv = src.scanDefinitions(o);
-    for (const dead of inv.dead) {
-      baseline += dead.tokens;
+
+    // Unloadable artifacts cost no context — the runtime never reads them.
+    // They are still worth archiving, but as clutter, not as a saving. Rolling
+    // them into one finding keeps a directory of stale files from burying the
+    // findings that actually cost tokens.
+    if (inv.dead.length > 0) {
       findings.push({
         agent: agent.label,
         category: "Definitions",
-        title: `${src.displayPath(dead.path, o.path, o.home)} — ${dead.reason}`,
-        tokensPerSession: dead.tokens,
+        title: `${inv.dead.length} unloadable file(s) in ~/.claude`,
+        detail: src.summarizeReasons(inv.dead) + " — clutter only, no context cost",
+        tokensPerSession: 0,
         confidence: "high",
         fixable: true,
-        action: {
-          type: "archive",
-          path: dead.path,
-          archiveTo: src.archivePathFor(dead.path, o.home),
-        },
+        action: { type: "archive-many", paths: inv.dead.map((d) => d.path), home: o.home },
       });
     }
+
     for (const real of inv.real) {
       baseline += real.tokens;
       findings.push({
         agent: agent.label,
         category: "Definitions",
         title: src.displayPath(real.path, o.path, o.home),
-        detail: "usage not confirmed — remove only if you recognize it as unused",
+        path: real.path,
+        detail:
+          `${real.tokens.toLocaleString()} tok of description loaded every session ` +
+          `(+${real.onDemandTokens.toLocaleString()} only when invoked) — ` +
+          `remove only if you recognize it as unused`,
         tokensPerSession: real.tokens,
         confidence: "low",
         fixable: true,

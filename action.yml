@@ -1,5 +1,5 @@
 name: "ctxdiet"
-description: "Fail the build if your AI coding-agent context exceeds a token budget."
+description: "Fail the build when your AI coding-agent context exceeds a token budget or a quality grade."
 branding:
   icon: "scissors"
   color: "green"
@@ -10,7 +10,10 @@ inputs:
     default: "."
   max-tokens:
     description: "Fail if context exceeds this many tokens"
-    required: true
+    required: false
+  fail-on:
+    description: "Fail if the grade is worse than this (A-F)"
+    required: false
 runs:
   using: "composite"
   steps:
@@ -18,4 +21,9 @@ runs:
       env:
         CTXDIET_PATH: ${{ inputs.path }}
         CTXDIET_MAX: ${{ inputs.max-tokens }}
-      run: npx ctxdiet@latest --path "$CTXDIET_PATH" --max-tokens "$CTXDIET_MAX"
+        CTXDIET_FAIL_ON: ${{ inputs.fail-on }}
+      run: |
+        args=(--path "$CTXDIET_PATH")
+        if [ -n "$CTXDIET_MAX" ]; then args+=(--max-tokens "$CTXDIET_MAX"); fi
+        if [ -n "$CTXDIET_FAIL_ON" ]; then args+=(--fail-on "$CTXDIET_FAIL_ON"); fi
+        npx ctxdiet@latest "${args[@]}"

@@ -1,7 +1,5 @@
 node_modules/
 dist/
-# CI uses `npm install` (caret-ranged deps), so the lockfile is not committed.
-package-lock.json
 *.bak
 *.bak.*
 *.log

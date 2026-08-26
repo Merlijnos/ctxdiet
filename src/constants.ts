@@ -14,6 +14,15 @@ export const HEAVY_PATH_TOKEN_CAP = 5000;
 export const HEAVY_WALK_MAX_FILES = 2000;
 export const HEAVY_WALK_MAX_BYTES = 8 * 1024 * 1024;
 
+/** Claude Code stops expanding @imports after this many hops; so do we. */
+export const MEMORY_IMPORT_MAX_DEPTH = 5;
+
+/** How deep to look for skill folders under a skills/ root (plugins nest them). */
+export const DEFINITION_MAX_DEPTH = 4;
+
+/** Ceiling on a single reported item, so one huge tree can't dwarf the report. */
+export const DEFINITION_TOKEN_CAP = 20000;
+
 /** A CLAUDE.md above this with no trimmable redundancy is flagged for manual review. */
 export const LARGE_CLAUDEMD_TOKENS = 3000;
 
@@ -24,6 +33,15 @@ const GRADE_THRESHOLDS: ReadonlyArray<readonly [number, string]> = [
   [5000, "C"],
   [10000, "D"],
 ];
+
+export const GRADES = ["A", "B", "C", "D", "F"] as const;
+export type Grade = (typeof GRADES)[number];
+
+/** Lower is better. Used by --fail-on to compare a result against a floor. */
+export function gradeRank(g: string): number {
+  const i = (GRADES as readonly string[]).indexOf(g);
+  return i < 0 ? GRADES.length : i;
+}
 
 export function grade(wasteTokens: number): string {
   for (const [limit, letter] of GRADE_THRESHOLDS) {

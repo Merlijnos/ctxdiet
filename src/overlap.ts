@@ -55,12 +55,18 @@ export function findOverlaps(text: string, threshold = 0.6): OverlapPair[] {
   const paired = new Set<number>();
 
   for (let i = 0; i < lines.length; i++) {
-    if (paired.has(i) || sets[i].size < 4) continue;
+    const a = lines[i];
+    const setA = sets[i];
+    if (a === undefined || setA === undefined) continue;
+    if (paired.has(i) || setA.size < 4) continue;
     for (let j = i + 1; j < lines.length; j++) {
-      if (paired.has(j) || sets[j].size < 4) continue;
-      if (lines[i] === lines[j]) continue; // exact dups are the trimmer's job
-      if (jaccard(sets[i], sets[j]) >= threshold) {
-        out.push({ a: lines[i], b: lines[j] });
+      const b = lines[j];
+      const setB = sets[j];
+      if (b === undefined || setB === undefined) continue;
+      if (paired.has(j) || setB.size < 4) continue;
+      if (a === b) continue; // exact dups are the trimmer's job
+      if (jaccard(setA, setB) >= threshold) {
+        out.push({ a, b });
         paired.add(j);
         break;
       }
@@ -96,7 +102,8 @@ export function applyOverlapResolution(
   } else if (choice === "merge") {
     const text = (merged ?? "").trim();
     if (text === "") return null;
-    const marker = lines[idxA].slice(0, lines[idxA].length - stripMarker(lines[idxA]).length);
+    const lineA = lines[idxA] ?? "";
+    const marker = lineA.slice(0, lineA.length - stripMarker(lineA).length);
     lines[idxA] = marker + text;
     lines.splice(idxB, 1);
   }

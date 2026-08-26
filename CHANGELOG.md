@@ -2,6 +2,73 @@
 
 All notable changes to this project are documented here.
 
+## [0.4.0]
+
+The package had gone a while without an update. This release is mostly about
+correctness: running it against a real `~/.claude` surfaced numbers that were
+not just imprecise but impossible, and a trim that could change what a memory
+file said.
+
+### Fixed
+
+- **The CLI crashed on part of its own supported Node range.** The CommonJS
+  build did `require()` on `@clack/prompts`, which is ESM-only, so 0.3.0 threw
+  `ERR_REQUIRE_ESM` on Node 20.0-20.18 and 22.0-22.11. The package is now ESM.
+- **Unloadable files were priced as savings.** A `skills/` layout that nests
+  (`skills/synced/<name>/SKILL.md`) was reported as "missing SKILL.md", sized
+  by full recursive byte count, and offered up for archiving. On one machine
+  that read as `-929,843 tokens/session` and grade F, and `--yes` would have
+  archived eight working skills. Skill discovery recurses now, per-item counts
+  are capped, and files the runtime cannot load are reported as clutter worth
+  zero tokens — they can no longer drive the headline or the grade.
+- **Trimming could change what a file said.** Duplicate headings were dropped
+  globally, which reparented the following section under the previous heading,
+  and identical lines were removed across the whole file. Heading removal is
+  now limited to headings that introduce nothing, and line deduplication resets
+  at each heading. Front matter, indented code, tilde fences, unterminated
+  fences and table rows are all left alone.
+- **Ignore files were barely matched.** `ignoreCovers` compared literal
+  strings, so `**/node_modules/**`, `node_modules/*` and `/node_modules` were
+  all reported as "weak". Ignore matching now follows the gitignore rules that
+  decide this: negation, anchoring, directory-only patterns and wildcards.
+- **`fix --json` applied nothing.** It printed what it would do and returned,
+  so `fix --json --yes` in a pipeline was a no-op.
+- Re-running `fix` stacked a duplicate `# added by ctxdiet` block on every
+  pass, and the patterns it added did not necessarily cover the paths that
+  triggered the finding.
+- A blank `$EDITOR` crashed interactive duplicate merging.
+
+### Added
+
+- **@imports are followed.** Claude Code expands `@path/to/file` inside a
+  memory file, and those files can import further files — all of it loaded
+  every session. Only the top-level file used to be read, so lean-looking
+  setups that import several rule files were the ones most understated.
+- **Definitions are priced honestly.** Agents, skills and commands only inject
+  their front-matter name and description into a session; the body is read on
+  invocation. Both are now reported separately.
+- **Project-scope definitions are scanned.** Only `~/.claude` was looked at, so
+  a repo checking its subagents and commands into `.claude/` had that context
+  counted as free. Archiving keeps a definition in the `.claude` directory it
+  came from.
+- **Eight more agents**: Amp, Cline, Roo Code, Continue, JetBrains Junie, Zed,
+  Aider and Amazon Q Developer. Plus nested `AGENTS.md`, global Cursor and
+  Windsurf rules, and Copilot's `.github/mcp.json`.
+- **`--fail-on <grade>`** for a quality floor in CI, alongside `--max-tokens`.
+  Also on the GitHub Action, where `max-tokens` is now optional.
+- `--json` carries a `schemaVersion`, every finding carries the `path` it
+  concerns, and overlaps are emitted in full rather than as a count.
+- Invalid flags exit 2, so CI can tell a bad invocation from a failed gate.
+
+### Changed
+
+- **Node 22.12+** (was 20). Node 20 reached end of life in April 2026.
+- Toolchain: TypeScript 7, commander 15, gpt-tokenizer 4, `@types/node` 26.
+- `walkFiles` prunes heavy directories, so a nested `AGENTS.md` search no
+  longer descends into `node_modules`.
+- 72 tests, up from 2; 83% line coverage. The lockfile is committed and CI
+  runs `npm ci` against Node 22 and 24.
+
 ## [0.3.0]
 
 - **Modern CLI UI.** Rebuilt output on `@clack/prompts` + `picocolors` (intro/outro,
