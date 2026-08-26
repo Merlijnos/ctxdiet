@@ -5,8 +5,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
 
 Every session starts by loading your memory files, their imports, your ignore-file
-gaps, every MCP server's tool schemas, and every skill and subagent description —
-before you type a word. Bloat there doesn't just cost money; it buries the guidance
+gaps, every MCP server's tool schemas, and every skill and subagent description,
+all before you type a word. Bloat there doesn't just cost money; it buries the guidance
 you actually care about, so the model skims and drifts.
 
 ctxdiet measures that startup cost, **proves which of it you never use**, and reclaims
@@ -17,7 +17,7 @@ npx ctxdiet        # scan, read-only
 npx ctxdiet fix    # summary per change, confirm, apply
 ```
 
-> Prompt caching makes repeated context *cheaper* — not *better to read*. Bloat still
+> Prompt caching makes repeated context *cheaper*, not *better to read*. Bloat still
 > fills the context window and degrades the model's attention. ctxdiet is about keeping
 > instructions sharp, not just the bill low.
 
@@ -32,17 +32,17 @@ into an answer:
 
 ```
 Claude Code · Gmail (./.mcp.json)  -550 tok
-  no calls to any Gmail tool — disable to reclaim its tool schemas
+  no calls to any Gmail tool; disable to reclaim its tool schemas
   evidence: 0 calls in 47 sessions over 62 days
 ```
 
 Servers and skills you *do* use drop out of the report entirely, so what's left is
 worth reading.
 
-- **Local only.** Nothing is uploaded. Only tool *names* are read — never prompts,
+- **Local only.** Nothing is uploaded. It reads tool *names* only, never prompts,
   arguments, or file contents. `--no-usage` turns it off completely.
 - **Honest about thin evidence.** Under 5 sessions or 7 days of history, nothing is
-  called unused — a skill you installed yesterday isn't waste. The report always
+  called unused, because a skill you installed yesterday isn't waste. The report always
   states the window it read.
 - **Evidence doesn't override consent.** `--yes` still only touches provably-dead
   waste. Rare use is not no use, so disabling a never-used server takes an explicit
@@ -58,7 +58,7 @@ Then ask "why is my context so big?" and the agent answers with real numbers.
 Two read-only tools: `ctxdiet_scan` and `ctxdiet_plan`.
 
 Writes are deliberately not exposed over MCP. `fix` rewrites your memory files and
-MCP config — that's a decision to make with a summary in front of you, not one an
+MCP config. That's a decision to make with a summary in front of you, not one an
 agent takes mid-conversation because it seemed helpful.
 
 ## How it compares
@@ -67,7 +67,7 @@ ctxdiet is the only one of these that changes anything.
 
 | | What it does | Overlap |
 | --- | --- | --- |
-| **ctxdiet** | Audits what loads *before you type*, proves what's unused, reclaims it | — |
+| **ctxdiet** | Audits what loads *before you type*, proves what's unused, reclaims it | n/a |
 | [ccusage](https://github.com/ryoppippi/ccusage) | Reports what you already spent, from usage logs | Both read local history; ccusage measures spend, ctxdiet cuts the fixed cost |
 | [rulesync](https://github.com/dyoshikawa/rulesync) | Generates and syncs rule files across agents | Complementary: it keeps your rules in sync, ctxdiet keeps them lean |
 | [repomix](https://github.com/yamadashy/repomix) | Packs repo *code* into a prompt | Different input: per-prompt code, not per-session config |
@@ -95,22 +95,22 @@ Auto-detected; only the ones you use are scanned.
 | Agent            | Memory                                        | Ignore           |
 | ---------------- | --------------------------------------------- | ---------------- |
 | Claude Code      | `CLAUDE.md`, `~/.claude/CLAUDE.md`            | `.claudeignore`  |
-| Codex            | `AGENTS.md` (including nested)                 | —                |
+| Codex            | `AGENTS.md` (including nested)                 | none             |
 | Cursor           | `.cursorrules`, `.cursor/rules/*.mdc`         | `.cursorignore`  |
 | Gemini CLI       | `GEMINI.md`                                   | `.geminiignore`  |
 | Windsurf         | `.windsurfrules`, `.windsurf/rules/*.md`      | `.codeiumignore` |
-| GitHub Copilot   | `.github/copilot-instructions.md`             | —                |
-| Amp              | `AGENT.md`                                    | —                |
+| GitHub Copilot   | `.github/copilot-instructions.md`             | none             |
+| Amp              | `AGENT.md`                                    | none             |
 | Cline            | `.clinerules`                                 | `.clineignore`   |
 | Roo Code         | `.roorules`, `.roo/rules/*.md`                | `.rooignore`     |
-| Continue         | `.continue/rules/*.md`                        | —                |
-| JetBrains Junie  | `.junie/guidelines.md`                        | —                |
-| Zed              | `.rules`                                      | —                |
+| Continue         | `.continue/rules/*.md`                        | none             |
+| JetBrains Junie  | `.junie/guidelines.md`                        | none             |
+| Zed              | `.rules`                                      | none             |
 | Aider            | `CONVENTIONS.md`                              | `.aiderignore`   |
-| Amazon Q         | `.amazonq/rules/*.md`                         | —                |
+| Amazon Q         | `.amazonq/rules/*.md`                         | none             |
 
 Claude-style definitions (`agents/`, `skills/`, `commands/`) are inventoried at
-both scopes — `~/.claude` and the project's own `.claude`.
+both scopes: `~/.claude` and the project's own `.claude`.
 
 ## What it does
 
@@ -122,17 +122,17 @@ both scopes — `~/.claude` and the project's own `.claude`.
   most worth trimming.
 - **Fixes** each with a summary you confirm. Never deletes (archives instead), always
   writes a `.bak`, and `--yes` only touches provably-dead waste.
-- **Leaves alone** anything whose usage it can't verify (MCP servers, real skills) — listed
-  for review, never auto-removed.
+- **Leaves alone** anything whose usage it can't verify (MCP servers, real skills). Those
+  are listed for review, never auto-removed.
 
 It also flags **reworded near-duplicate rules** and lets you resolve them interactively
-(keep one, or merge in your editor) — lexical and offline, no ML.
+(keep one, or merge in your editor). Lexical and offline, no ML.
 
 ### How it counts
 
 Text files are measured with a real BPE tokenizer (`gpt-tokenizer`, offline); directories
 are estimated from size. There's no exact offline Claude tokenizer, so the GPT-4 encoding
-is used as a close cross-model proxy — good for ranking what to cut, not a billing figure.
+is used as a close cross-model proxy: good for ranking what to cut, not a billing figure.
 
 Two rules keep the numbers honest:
 
@@ -158,7 +158,7 @@ Fail a build or commit when context drifts past a budget:
 ```yaml
 # .pre-commit-config.yaml
 - repo: https://github.com/Merlijnos/ctxdiet
-  rev: v0.4.0
+  rev: v0.5.0
   hooks:
     - id: ctxdiet
       args: ["--max-tokens", "8000"]
@@ -184,7 +184,7 @@ Or directly: `npx ctxdiet --max-tokens 8000` (exits non-zero when over).
 Exit codes: `0` clean, `1` a gate failed, `2` the invocation was wrong.
 
 `ctxdiet fix --json --yes` applies high-confidence fixes non-interactively and prints
-the paths it touched — usable from a script.
+the paths it touched, so it's usable from a script.
 
 Commands: `ctxdiet` (scan), `ctxdiet fix` (apply), `ctxdiet mcp` (serve over stdio).
 

@@ -62,9 +62,9 @@ export function printScanResult(r: ScanResult, o: ResolvedOptions): void {
 
   if (high.length === 0) {
     if (low.length === 0 && r.overlaps.length === 0) {
-      log.success("Nothing to fix — your agent config is already lean.");
+      log.success("Nothing to fix. Your agent config is already lean.");
     } else {
-      log.warn("No auto-fixable waste — but a few things below are worth a look.");
+      log.warn("No auto-fixable waste, but a few things below are worth a look.");
     }
   } else {
     const body = high
@@ -92,12 +92,12 @@ export function printScanResult(r: ScanResult, o: ResolvedOptions): void {
       low
         .map((f) => `${pc.cyan(f.agent)} · ${f.title}  ${pc.yellow(fmt(f.tokensPerSession) + " tok")}`)
         .join("\n") + `\n${pc.dim("Disable only what you know you don't use.")}`;
-    note(body, "Review — usage unconfirmed");
+    note(body, "Review: usage unconfirmed");
   }
 
   if (r.overlaps.length > 0) {
     log.warn(
-      `${r.overlaps.length} possible duplicate rule${r.overlaps.length > 1 ? "s" : ""} — ` +
+      `${r.overlaps.length} possible duplicate rule${r.overlaps.length > 1 ? "s" : ""}, ` +
         `resolve interactively with ${pc.bold("ctxdiet fix")}`
     );
   }
@@ -122,7 +122,7 @@ function usageNote(u: UsageSummary): string {
   if (!u.consulted) return `Usage evidence: off${u.note ? ` (${u.note})` : ""}.`;
   const window = `${u.sessions} session${u.sessions === 1 ? "" : "s"} over ${u.days} day${u.days === 1 ? "" : "s"}`;
   return u.conclusive
-    ? `Usage evidence: read ${window} of local history — never uploaded.`
+    ? `Usage evidence: read ${window} of local history. Never uploaded.`
     : `Usage evidence: only ${window} of history, too little to call anything unused yet.`;
 }
 
@@ -163,7 +163,7 @@ export function printableScan(r: ScanResult, options: ResolvedOptions = r.option
     path: options.path,
     model: options.model,
     sessionsPerMonth: options.sessionsPerMonth,
-    method: "GPT-4 tokenizer for files, size estimate for dirs — offline; not a billing figure",
+    method: "GPT-4 tokenizer for files, size estimate for dirs. Offline; not a billing figure",
     detectedAgents: r.detectedAgents,
     usage: r.usage,
     grade: r.grade,

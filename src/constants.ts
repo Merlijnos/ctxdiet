@@ -1,4 +1,4 @@
-// All numbers here are deliberate, documented heuristics — see README "How it
+// All numbers here are deliberate, documented heuristics. See README "How it
 // estimates tokens". ctxdiet never claims exactness.
 
 /** The one and only token heuristic: ~4 chars per token. */
@@ -16,7 +16,7 @@ export const HEAVY_WALK_MAX_BYTES = 8 * 1024 * 1024;
 
 /**
  * Context window per model, in tokens. Used only to express config cost as a
- * share of the window — "7% of every session is gone before you type" lands in
+ * share of the window: "7% of every session is gone before you type" lands in
  * a way that "14,233 tokens" does not.
  */
 export const CONTEXT_WINDOW: Record<string, number> = {

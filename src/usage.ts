@@ -14,7 +14,7 @@ import {
  *
  * Every other finding ctxdiet reports is provable from config alone. MCP
  * servers, skills and subagents are not: their cost is visible, their value is
- * not, so they could only ever be listed as "usage not confirmed — disable only
+ * not, so they could only ever be listed as "usage not confirmed; disable only
  * if you know you don't use it". That puts the work back on the user, which is
  * the opposite of the point.
  *
@@ -25,7 +25,7 @@ import {
  * sessions over 62 days".
  *
  * Local files only. No network, nothing uploaded, and `--no-usage` turns the
- * whole thing off. Only tool *names* are extracted — never prompts, arguments
+ * whole thing off. Only tool *names* are extracted, never prompts, arguments
  * or file contents.
  */
 export interface UsageStats {
@@ -61,7 +61,7 @@ export function emptyUsage(reason?: string): UsageStats {
 }
 
 /**
- * A transcript contains every tool *definition* too — the system prompt lists
+ * A transcript contains every tool *definition* too: the system prompt lists
  * every MCP tool available. Scanning for names anywhere in the file therefore
  * reports every configured server as "used", which is exactly backwards. Only
  * a `tool_use` block counts, so lines that could hold one are parsed properly
@@ -157,7 +157,7 @@ function transcripts(home: string): Transcript[] {
 /**
  * Read recent transcripts and tally what was invoked.
  *
- * Bounded on every axis — file count, total bytes and age — so a scan stays
+ * Bounded on every axis (file count, total bytes and age) so a scan stays
  * fast on a machine with years of history. Newest transcripts are read first,
  * so hitting a cap costs the oldest evidence, which matters least.
  */

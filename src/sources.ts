@@ -227,7 +227,7 @@ export function readMcpServers(file: string): string[] {
   try {
     json = JSON.parse(readFileSafe(file));
   } catch {
-    return []; // malformed JSON — skip rather than guess
+    return []; // malformed JSON: skip rather than guess
   }
   const servers = (json as Record<string, unknown>)?.["mcpServers"];
   if (servers && typeof servers === "object") {
@@ -249,7 +249,7 @@ export interface DefRef {
   name: string;
   reason: string;
   /**
-   * Tokens this definition injects into EVERY session — its front-matter
+   * Tokens this definition injects into EVERY session: its front-matter
    * name/description. Zero for artifacts the runtime cannot load at all.
    */
   tokens: number;
@@ -260,7 +260,7 @@ export interface DefRef {
 export interface DefInventory {
   /**
    * HIGH-confidence, provably-dead artifacts: unloadable, so they cost no
-   * context — clutter to archive, never a per-session saving.
+   * context. Clutter to archive, never a per-session saving.
    */
   dead: DefRef[];
   /** LOW-confidence live definitions whose descriptions do load every session. */
@@ -352,7 +352,7 @@ function holdsSkill(dir: string, depth: number): boolean {
 }
 
 /**
- * skills/ holds one folder per skill — but plugin and sync layouts group them
+ * skills/ holds one folder per skill, but plugin and sync layouts group them
  * one or more levels deeper (skills/synced/<plugin>/SKILL.md). Recurse through
  * grouping folders instead of declaring them broken: calling a populated tree
  * "missing SKILL.md" both invented an enormous phantom saving and offered to
@@ -432,7 +432,7 @@ function classifyFile(
   });
 }
 
-/** "3 backup/temp artifacts, 1 empty definition file" — grouped reasons. */
+/** Grouped reasons, e.g. "3 backup/temp artifacts, 1 empty definition file". */
 export function summarizeReasons(refs: DefRef[]): string {
   const counts = new Map<string, number>();
   for (const r of refs) counts.set(r.reason, (counts.get(r.reason) ?? 0) + 1);

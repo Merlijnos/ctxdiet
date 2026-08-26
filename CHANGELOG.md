@@ -4,7 +4,7 @@ All notable changes to this project are documented here.
 
 ## [0.5.0]
 
-Everything ctxdiet reported could be derived from config files alone — which
+Everything ctxdiet reported could be derived from config files alone, which
 meant the two most expensive categories, MCP servers and skills, could only ever
 be listed as "usage not confirmed". This release reads the evidence that was
 already on disk.
@@ -13,11 +13,11 @@ already on disk.
 
 - **Usage evidence.** ctxdiet now reads local session transcripts
   (`~/.claude/projects`) to prove which MCP servers, skills and subagents are
-  actually invoked. "Usage not confirmed — disable only if you know" becomes
+  actually invoked. "Usage not confirmed; disable only if you know" becomes
   "0 calls in 47 sessions over 62 days". Things you *do* use drop out of the
   report entirely, so what remains is worth reading.
 
-  Local files only, nothing uploaded, and only tool *names* are read — never
+  Local files only, nothing uploaded, and only tool *names* are read, never
   prompts, arguments or file contents. `--no-usage` turns it off. Below 5
   sessions or 7 days of history nothing is called unused, because a skill
   installed yesterday is not waste.
@@ -31,7 +31,7 @@ already on disk.
 
       claude mcp add ctxdiet -- npx -y ctxdiet mcp
 
-  Two read-only tools — `ctxdiet_scan` and `ctxdiet_plan`. Writes are
+  Two read-only tools: `ctxdiet_scan` and `ctxdiet_plan`. Writes are
   deliberately not exposed: `fix` rewrites your memory and MCP config, which is
   a decision to make with a summary in front of you, not one an agent takes
   mid-conversation. Adds no dependencies.
@@ -65,7 +65,7 @@ file said.
   that read as `-929,843 tokens/session` and grade F, and `--yes` would have
   archived eight working skills. Skill discovery recurses now, per-item counts
   are capped, and files the runtime cannot load are reported as clutter worth
-  zero tokens — they can no longer drive the headline or the grade.
+  zero tokens, so they can no longer drive the headline or the grade.
 - **Trimming could change what a file said.** Duplicate headings were dropped
   globally, which reparented the following section under the previous heading,
   and identical lines were removed across the whole file. Heading removal is
@@ -86,7 +86,7 @@ file said.
 ### Added
 
 - **@imports are followed.** Claude Code expands `@path/to/file` inside a
-  memory file, and those files can import further files — all of it loaded
+  memory file, and those files can import further files, all of it loaded
   every session. Only the top-level file used to be read, so lean-looking
   setups that import several rule files were the ones most understated.
 - **Definitions are priced honestly.** Agents, skills and commands only inject
@@ -117,13 +117,13 @@ file said.
 ## [0.3.0]
 
 - **Modern CLI UI.** Rebuilt output on `@clack/prompts` + `picocolors` (intro/outro,
-  log, note boxes). Dropped `chalk`, `cli-table3`, and `diff` — fewer, lighter deps.
+  log, note boxes). Dropped `chalk`, `cli-table3`, and `diff` for fewer, lighter deps.
 - **Summaries, not diffs.** `fix` shows a one-line summary per change and a `[y/N]`
   confirm, instead of dumping a raw unified diff.
 - **Interactive duplicate resolution.** When reworded near-duplicate rules are found,
   `fix` walks each pair with Keep A / Keep B / Merge in editor / Skip. "Merge" opens
   `$EDITOR` (fallback `nano`) on a temp file and applies the merged result. Detection
-  stays offline lexical word-overlap — no ML, no network.
+  stays offline lexical word-overlap: no ML, no network.
 
 ## [0.2.0]
 
@@ -131,11 +131,11 @@ file said.
   (`gpt-tokenizer`, pure-JS, offline) instead of chars/4. Heavy directories still use a
   bounded byte estimate. No exact offline Claude tokenizer exists; the GPT-4 encoding is
   used as a close cross-model proxy.
-- **CI budget gate.** `--max-tokens <n>` exits non-zero when context exceeds the budget —
+- **CI budget gate.** `--max-tokens <n>` exits non-zero when context exceeds the budget,
   for pre-commit hooks and PR checks.
 - **GitHub Action** (`action.yml`) and a **pre-commit hook** (`.pre-commit-hooks.yaml`).
 - **Possible-duplicate detection.** Flags reworded near-duplicate rule lines (lexical
-  overlap, offline) for manual merge — never auto-changed.
+  overlap, offline) for manual merge. Never auto-changed.
 - Reframed around agent reasoning quality, not just cost.
 
 ## [0.1.1]

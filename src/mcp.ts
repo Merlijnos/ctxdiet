@@ -113,7 +113,7 @@ function handle(req: Request, base: ResolvedOptions): string | null {
         instructions:
           "Call ctxdiet_scan to measure what a session loads before the user types. " +
           "Report the grade, the baseline and its share of the context window, then the " +
-          "findings worth acting on. Applying changes is not available here — tell the " +
+          "findings worth acting on. Applying changes is not available here; tell the " +
           "user to run `npx ctxdiet fix`.",
       });
     }
@@ -150,7 +150,7 @@ function handle(req: Request, base: ResolvedOptions): string | null {
           id,
           { dryRun: true, changes: plan },
           plan.length === 0
-            ? "Nothing to change — this setup is already lean."
+            ? "Nothing to change. This setup is already lean."
             : `${plan.length} change(s) available. Run \`npx ctxdiet fix\` to apply.`
         );
       } catch (err) {
@@ -180,8 +180,8 @@ function summarize(report: Record<string, unknown>): string {
 }
 
 /**
- * Serve on stdio until stdin closes. Nothing but JSON-RPC may reach stdout —
- * a stray log line breaks the transport — so diagnostics go to stderr.
+ * Serve on stdio until stdin closes. Nothing but JSON-RPC may reach stdout,
+ * because a stray log line breaks the transport, so diagnostics go to stderr.
  */
 export async function runMcpServer(base: ResolvedOptions): Promise<void> {
   const rl = readline.createInterface({ input: process.stdin, terminal: false });

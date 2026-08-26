@@ -4,7 +4,7 @@ import { CHARS_PER_TOKEN } from "./constants.js";
 
 // Real BPE tokenizer (gpt-tokenizer, pure-JS, offline) for accurate counts on
 // text files. Loaded lazily so startup stays fast; falls back to chars/4 if it
-// is ever unavailable. Note: no exact offline Claude tokenizer exists — the
+// is ever unavailable. Note: no exact offline Claude tokenizer exists, so the
 // GPT-4 (cl100k) encoding is a close cross-model proxy, not a billing figure.
 let encoder: ((s: string) => number) | null = null;
 let encoderLoaded = false;
