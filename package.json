@@ -1,7 +1,7 @@
 {
   "name": "ctxdiet",
-  "version": "0.4.0",
-  "description": "Detect, fix, and measure AI coding-agent context-token waste across Claude Code, Codex, Cursor, Gemini, Windsurf, Copilot, Cline, Roo & more. Other tools report waste \u2014 ctxdiet fixes it.",
+  "version": "0.5.0",
+  "description": "Audit and fix AI coding-agent context bloat. Proves which MCP servers and skills you never use from local session history, then reclaims the tokens. Claude Code, Codex, Cursor, Copilot, Cline, Roo & more. Runs as a CLI or an MCP server.",
   "keywords": [
     "claude",
     "claude-code",
@@ -28,7 +28,12 @@
     "zed",
     "junie",
     "agent-rules",
-    "context-engineering"
+    "context-engineering",
+    "mcp-server",
+    "token-waste",
+    "claude-skills",
+    "subagents",
+    "developer-tools"
   ],
   "license": "MIT",
   "author": "Merlijn de Groot <merlijndegroot498@gmail.com>",

@@ -4,25 +4,82 @@
 [![CI](https://github.com/Merlijnos/ctxdiet/actions/workflows/ci.yml/badge.svg)](https://github.com/Merlijnos/ctxdiet/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
 
-Bloated agent instructions make your coding agent *worse*. Duplicate and conflicting
-rules bury the signal, so the model skims, drifts, and ignores the guidance you actually
-care about. ctxdiet finds the dead weight in your agent config, trims it with diffs you
-approve, and shows the context you reclaimed. Local, no account.
+Every session starts by loading your memory files, their imports, your ignore-file
+gaps, every MCP server's tool schemas, and every skill and subagent description —
+before you type a word. Bloat there doesn't just cost money; it buries the guidance
+you actually care about, so the model skims and drifts.
+
+ctxdiet measures that startup cost, **proves which of it you never use**, and reclaims
+it. Local, offline, no account.
+
+```
+npx ctxdiet        # scan, read-only
+npx ctxdiet fix    # summary per change, confirm, apply
+```
 
 > Prompt caching makes repeated context *cheaper* — not *better to read*. Bloat still
 > fills the context window and degrades the model's attention. ctxdiet is about keeping
 > instructions sharp, not just the bill low.
 
+## Evidence, not guesswork
+
+Most of what a scanner can tell you is obvious from your config. The expensive part
+isn't: an MCP server costs ~550 tokens of tool schemas every session whether or not
+you've ever called it, and no config file records that.
+
+Your session transcripts do. ctxdiet reads them locally and turns the question back
+into an answer:
+
 ```
-npx ctxdiet        # scan, read-only
-npx ctxdiet fix    # show diffs, confirm, apply
+Claude Code · Gmail (./.mcp.json)  -550 tok
+  no calls to any Gmail tool — disable to reclaim its tool schemas
+  evidence: 0 calls in 47 sessions over 62 days
 ```
+
+Servers and skills you *do* use drop out of the report entirely, so what's left is
+worth reading.
+
+- **Local only.** Nothing is uploaded. Only tool *names* are read — never prompts,
+  arguments, or file contents. `--no-usage` turns it off completely.
+- **Honest about thin evidence.** Under 5 sessions or 7 days of history, nothing is
+  called unused — a skill you installed yesterday isn't waste. The report always
+  states the window it read.
+- **Evidence doesn't override consent.** `--yes` still only touches provably-dead
+  waste. Rare use is not no use, so disabling a never-used server takes an explicit
+  `--include-unused`.
+
+## Use it from your agent
+
+```
+claude mcp add ctxdiet -- npx -y ctxdiet mcp
+```
+
+Then ask "why is my context so big?" and the agent answers with real numbers.
+Two read-only tools: `ctxdiet_scan` and `ctxdiet_plan`.
+
+Writes are deliberately not exposed over MCP. `fix` rewrites your memory files and
+MCP config — that's a decision to make with a summary in front of you, not one an
+agent takes mid-conversation because it seemed helpful.
+
+## How it compares
+
+ctxdiet is the only one of these that changes anything.
+
+| | What it does | Overlap |
+| --- | --- | --- |
+| **ctxdiet** | Audits what loads *before you type*, proves what's unused, reclaims it | — |
+| [ccusage](https://github.com/ryoppippi/ccusage) | Reports what you already spent, from usage logs | Both read local history; ccusage measures spend, ctxdiet cuts the fixed cost |
+| [rulesync](https://github.com/dyoshikawa/rulesync) | Generates and syncs rule files across agents | Complementary: it keeps your rules in sync, ctxdiet keeps them lean |
+| [repomix](https://github.com/yamadashy/repomix) | Packs repo *code* into a prompt | Different input: per-prompt code, not per-session config |
+
+Run ctxdiet alongside any of them.
 
 ## What one cleanup looks like
 
 ```
 Before vs after
 Context  21,346 → 1,227   -20,119 tok
+Window   10.7% of a 200k window → 0.6% of a 200k window
 Cost     $6.40  → $0.37/mo   -$6.03
 Grade    F → A
 ```
@@ -92,7 +149,7 @@ Fail a build or commit when context drifts past a budget:
 
 ```yaml
 # .github/workflows/ctxdiet.yml
-- uses: Merlijnos/ctxdiet@v0.4.0
+- uses: Merlijnos/ctxdiet@v0.5.0
   with:
     max-tokens: 8000
     fail-on: B        # optional quality floor, independent of the token budget
@@ -117,6 +174,8 @@ Or directly: `npx ctxdiet --max-tokens 8000` (exits non-zero when over).
 --fail-on <grade>           CI gate: exit non-zero if the grade is worse than this (A-F)
 --model <opus|sonnet|haiku> pricing for the optional $ estimate (default: sonnet)
 --sessions-per-month <n>    default 100
+--no-usage                  skip local session history; judge config alone
+--include-unused            let --yes act on items history shows are never used
 --dry-run                   show what would change, write nothing
 --yes                       apply high-confidence fixes without prompting
 --json                      machine-readable output (carries a schemaVersion)
@@ -126,5 +185,7 @@ Exit codes: `0` clean, `1` a gate failed, `2` the invocation was wrong.
 
 `ctxdiet fix --json --yes` applies high-confidence fixes non-interactively and prints
 the paths it touched — usable from a script.
+
+Commands: `ctxdiet` (scan), `ctxdiet fix` (apply), `ctxdiet mcp` (serve over stdio).
 
 Node 22.12+. MIT. Sponsor: https://github.com/sponsors/Merlijnos
