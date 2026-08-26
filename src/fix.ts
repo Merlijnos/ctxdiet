@@ -5,12 +5,12 @@ import os from "node:os";
 import path from "node:path";
 import pc from "picocolors";
 
-import { applyOverlapResolution, ResolveChoice } from "./overlap";
-import { printBeforeAfter } from "./report";
-import { scan } from "./scan";
-import { displayPath, readFileSafe } from "./sources";
-import { trimMarkdown } from "./trim";
-import { Finding, FixAction, Overlap, ResolvedOptions } from "./types";
+import { applyOverlapResolution, ResolveChoice } from "./overlap.js";
+import { printBeforeAfter } from "./report.js";
+import { scan } from "./scan.js";
+import { displayPath, readFileSafe } from "./sources.js";
+import { trimMarkdown } from "./trim.js";
+import { Finding, FixAction, Overlap, ResolvedOptions } from "./types.js";
 
 // ---------------------------------------------------------------------------
 // concrete change for a finding (computed from fresh on-disk state)

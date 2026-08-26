@@ -5,11 +5,11 @@ import os from "node:os";
 import path from "node:path";
 import pc from "picocolors";
 
-import { promptConfirm, runFix } from "./fix";
-import { printScanResult } from "./report";
-import { scan } from "./scan";
-import { detectModel } from "./sources";
-import { Model, ResolvedOptions } from "./types";
+import { promptConfirm, runFix } from "./fix.js";
+import { printScanResult } from "./report.js";
+import { scan } from "./scan.js";
+import { detectModel } from "./sources.js";
+import { Model, ResolvedOptions } from "./types.js";
 
 const VERSION = "0.3.0";
 const BANNER = pc.bgCyan(pc.black(" ctxdiet "));

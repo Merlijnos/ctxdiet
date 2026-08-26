@@ -5,9 +5,9 @@ import {
   HEAVY_PATH_TOKEN_CAP,
   HEAVY_WALK_MAX_BYTES,
   HEAVY_WALK_MAX_FILES,
-} from "./constants";
-import { estimateTokens, estimateTokensFromBytes } from "./tokens";
-import { Model, ResolvedOptions } from "./types";
+} from "./constants.js";
+import { estimateTokens, estimateTokensFromBytes } from "./tokens.js";
+import { Model, ResolvedOptions } from "./types.js";
 
 // ---------------------------------------------------------------------------
 // fs helpers

@@ -1,7 +1,7 @@
 import path from "node:path";
 
-import { exists, isDir, isFile, uniq, walkFiles } from "./sources";
-import { ResolvedOptions } from "./types";
+import { exists, isDir, isFile, uniq, walkFiles } from "./sources.js";
+import { ResolvedOptions } from "./types.js";
 
 /**
  * A coding agent and the persistent-context files it loads every session.

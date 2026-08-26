@@ -1,12 +1,12 @@
 import path from "node:path";
 
-import { AgentDef, detectAgents } from "./agents";
-import { grade, LARGE_CLAUDEMD_TOKENS, MCP_SERVER_TOKEN_EST } from "./constants";
-import { findOverlaps } from "./overlap";
-import * as src from "./sources";
-import { estimateTokens } from "./tokens";
-import { trimMarkdown } from "./trim";
-import { Finding, Overlap, ResolvedOptions, ScanResult } from "./types";
+import { AgentDef, detectAgents } from "./agents.js";
+import { grade, LARGE_CLAUDEMD_TOKENS, MCP_SERVER_TOKEN_EST } from "./constants.js";
+import { findOverlaps } from "./overlap.js";
+import * as src from "./sources.js";
+import { estimateTokens } from "./tokens.js";
+import { trimMarkdown } from "./trim.js";
+import { Finding, Overlap, ResolvedOptions, ScanResult } from "./types.js";
 
 interface HeavyPath {
   name: string;

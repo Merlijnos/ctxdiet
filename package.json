@@ -34,7 +34,7 @@
     "url": "https://github.com/Merlijnos/ctxdiet/issues"
   },
   "funding": "https://github.com/sponsors/Merlijnos",
-  "type": "commonjs",
+  "type": "module",
   "bin": {
     "ctxdiet": "dist/src/index.js",
     "slimclaude": "dist/src/index.js"

@@ -4,9 +4,9 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
-import { runFix } from "../src/fix";
-import { scan } from "../src/scan";
-import { ResolvedOptions } from "../src/types";
+import { runFix } from "../src/fix.js";
+import { scan } from "../src/scan.js";
+import { ResolvedOptions } from "../src/types.js";
 
 function tmpdir(prefix: string): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));

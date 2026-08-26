@@ -1,9 +1,9 @@
 import { log, note } from "@clack/prompts";
 import pc from "picocolors";
 
-import { monthlyCost } from "./pricing";
-import { shortenPath } from "./sources";
-import { Finding, ResolvedOptions, ScanResult } from "./types";
+import { monthlyCost } from "./pricing.js";
+import { shortenPath } from "./sources.js";
+import { Finding, ResolvedOptions, ScanResult } from "./types.js";
 
 const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
 const usd = (n: number) => `$${n.toFixed(2)}`;
