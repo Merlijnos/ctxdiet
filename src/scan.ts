@@ -4,6 +4,7 @@ import { detectAgents, type AgentDef } from "./agents.js";
 import { grade, LARGE_CLAUDEMD_TOKENS, MCP_SERVER_TOKEN_EST } from "./constants.js";
 import { covers, parseIgnoreRules } from "./ignore.js";
 import { resolveImports } from "./imports.js";
+import { emptyUsage, readUsage, verdictFor, windowLabel, type UsageStats } from "./usage.js";
 import { findOverlaps } from "./overlap.js";
 import * as src from "./sources.js";
 import { estimateTokens } from "./tokens.js";
@@ -39,9 +40,10 @@ export function scan(o: ResolvedOptions): ScanResult {
 
   const agents = detectAgents(o);
   const heavy = presentHeavyPaths(o);
+  const usage = o.usage ? readUsage(o.home) : emptyUsage("disabled with --no-usage");
 
   for (const agent of agents) {
-    baselineTokens += scanAgent(agent, o, heavy, findings, overlaps);
+    baselineTokens += scanAgent(agent, o, heavy, findings, overlaps, usage);
   }
 
   const headlineSavings = findings
@@ -53,6 +55,13 @@ export function scan(o: ResolvedOptions): ScanResult {
 
   return {
     options: o,
+    usage: {
+      consulted: o.usage && usage.unavailable === undefined,
+      sessions: usage.sessions,
+      days: usage.days,
+      conclusive: usage.conclusive,
+      ...(usage.unavailable === undefined ? {} : { note: usage.unavailable }),
+    },
     detectedAgents: agents.map((a) => ({ id: a.id, label: a.label })),
     findings,
     overlaps,
@@ -69,7 +78,8 @@ function scanAgent(
   o: ResolvedOptions,
   heavy: HeavyPath[],
   findings: Finding[],
-  overlaps: Overlap[]
+  overlaps: Overlap[],
+  usage: UsageStats
 ): number {
   let baseline = 0;
 
@@ -109,6 +119,7 @@ function scanAgent(
         tokensPerSession: saved,
         confidence: "high",
         fixable: true,
+        autoApply: true,
         action: { type: "trim", path: file },
       });
     } else if (origTokens > LARGE_CLAUDEMD_TOKENS) {
@@ -121,6 +132,7 @@ function scanAgent(
         tokensPerSession: 0,
         confidence: "high",
         fixable: false,
+        autoApply: false,
         manualReview: true,
       });
     }
@@ -160,6 +172,7 @@ function scanAgent(
         tokensPerSession: heavyTokens,
         confidence: "high",
         fixable: true,
+        autoApply: true,
         action:
           content === null
             ? {
@@ -172,20 +185,34 @@ function scanAgent(
     }
   }
 
-  // --- MCP servers (LOW-confidence, review only) ---
+  // --- MCP servers: priced from config, judged from session history ---
   for (const file of agent.mcpFiles(o)) {
     for (const server of src.readMcpServers(file)) {
       baseline += MCP_SERVER_TOKEN_EST;
+      const verdict = verdictFor(usage, usage.servers, server);
+      const where = src.displayPath(file, o.path, o.home);
+
+      // In active use: it costs tokens, but that cost is buying something.
+      // Reporting it as waste would train people to ignore the report.
+      if (verdict.kind === "used") continue;
+
+      const proven = verdict.kind === "unused";
       findings.push({
         agent: agent.label,
         category: "MCP",
-        title: `${server} (${src.displayPath(file, o.path, o.home)})`,
+        title: `${server} (${where})`,
         path: file,
-        detail: "usage not confirmed — disable only if you know you don't use it",
+        detail: proven
+          ? `no calls to any ${server} tool — disable to reclaim its tool schemas`
+          : "usage not confirmed — disable only if you know you don't use it",
+        ...(proven ? { evidence: `0 calls in ${windowLabel(usage)}` } : {}),
         tokensPerSession: MCP_SERVER_TOKEN_EST,
-        confidence: "low",
+        confidence: proven ? "high" : "low",
         fixable: true,
-        manualReview: true,
+        // Rare use is not no use. Evidence promotes it into the headline, but
+        // acting on it still takes --include-unused.
+        autoApply: false,
+        manualReview: !proven,
         action: { type: "mcp-disable", path: file, server },
       });
     }
@@ -208,29 +235,41 @@ function scanAgent(
         tokensPerSession: 0,
         confidence: "high",
         fixable: true,
+        autoApply: true,
         action: { type: "archive-many", paths: inv.dead.map((d) => d.path), home: o.home },
       });
     }
 
-    for (const real of inv.real) {
-      baseline += real.tokens;
+    for (const definition of inv.real) {
+      baseline += definition.tokens;
+      const isSkill = definition.reason === "skill";
+      const counts = isSkill ? usage.skills : usage.subagents;
+      const verdict = verdictFor(usage, counts, definition.name);
+      if (verdict.kind === "used") continue;
+
+      const proven = verdict.kind === "unused";
+      const cost =
+        `${definition.tokens.toLocaleString()} tok of description loaded every session ` +
+        `(+${definition.onDemandTokens.toLocaleString()} only when invoked)`;
+
       findings.push({
         agent: agent.label,
         category: "Definitions",
-        title: src.displayPath(real.path, o.path, o.home),
-        path: real.path,
-        detail:
-          `${real.tokens.toLocaleString()} tok of description loaded every session ` +
-          `(+${real.onDemandTokens.toLocaleString()} only when invoked) — ` +
-          `remove only if you recognize it as unused`,
-        tokensPerSession: real.tokens,
-        confidence: "low",
+        title: src.displayPath(definition.path, o.path, o.home),
+        path: definition.path,
+        detail: proven
+          ? `${cost} — never invoked`
+          : `${cost} — remove only if you recognize it as unused`,
+        ...(proven ? { evidence: `0 uses in ${windowLabel(usage)}` } : {}),
+        tokensPerSession: definition.tokens,
+        confidence: proven ? "high" : "low",
         fixable: true,
-        manualReview: true,
+        autoApply: false,
+        manualReview: !proven,
         action: {
           type: "archive",
-          path: real.path,
-          archiveTo: src.archivePathFor(real.path, o.home),
+          path: definition.path,
+          archiveTo: src.archivePathFor(definition.path, o.home),
         },
       });
     }

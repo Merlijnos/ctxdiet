@@ -1,9 +1,10 @@
 import { log, note } from "@clack/prompts";
 import pc from "picocolors";
 
+import { CONTEXT_WINDOW } from "./constants.js";
 import { monthlyCost } from "./pricing.js";
 import { shortenPath } from "./sources.js";
-import type { Finding, ResolvedOptions, ScanResult } from "./types.js";
+import type { Finding, ResolvedOptions, ScanResult, UsageSummary } from "./types.js";
 
 /**
  * Bumped on any breaking change to --json. Consumers pin on it; the CI gate and
@@ -18,6 +19,14 @@ function dollars(tokens: number, o: ResolvedOptions): string {
   return usd(monthlyCost(tokens, o.sessionsPerMonth, o.model));
 }
 
+/** Config cost as a share of the context window, e.g. "7.1% of a 200k window". */
+export function windowShare(tokens: number, model: string): string {
+  const window = CONTEXT_WINDOW[model] ?? 200_000;
+  const pct = (tokens / window) * 100;
+  const shown = pct >= 10 ? pct.toFixed(0) : pct.toFixed(1);
+  return `${shown}% of a ${Math.round(window / 1000)}k window`;
+}
+
 export function gradeBadge(g: string): string {
   if (g === "A" || g === "B") return pc.bgGreen(pc.black(` ${g} `));
   if (g === "C") return pc.bgYellow(pc.black(` ${g} `));
@@ -26,18 +35,23 @@ export function gradeBadge(g: string): string {
 
 export function printScanResult(r: ScanResult, o: ResolvedOptions): void {
   if (o.json) {
-    console.log(JSON.stringify(toJson(r), null, 2));
+    console.log(JSON.stringify(printableScan(r, o), null, 2));
     return;
   }
 
-  log.message(`${pc.dim(shortenPath(o.path, o.home))}   grade ${gradeBadge(r.grade)}`);
+  log.message(
+    `${pc.dim(shortenPath(o.path, o.home))}   grade ${gradeBadge(r.grade)}   ` +
+      pc.dim(
+        `${fmt(r.baselineTokens)} tok of persistent context · ${windowShare(r.baselineTokens, o.model)}`
+      )
+  );
 
   if (r.detectedAgents.length === 0) {
     log.warn(
       "No agent setup detected. Supported: Claude Code, Codex/AGENTS.md, " +
         "Cursor, Gemini CLI, Windsurf, GitHub Copilot."
     );
-    methodNote(o);
+    methodNote(o, r.usage);
     return;
   }
 
@@ -59,8 +73,9 @@ export function printScanResult(r: ScanResult, o: ResolvedOptions): void {
           f.tokensPerSession > 0
             ? pc.green(`-${fmt(f.tokensPerSession)} tok`)
             : pc.dim("review");
+        const proof = f.evidence ? `\n  ${pc.yellow("evidence: " + f.evidence)}` : "";
         const why = f.detail ? `\n  ${pc.dim(f.detail)}` : "";
-        return `${pc.cyan(f.agent)} · ${f.title}  ${save}${why}`;
+        return `${pc.cyan(f.agent)} · ${f.title}  ${save}${why}${proof}`;
       })
       .join("\n\n");
     note(body, "Fixable waste");
@@ -87,10 +102,10 @@ export function printScanResult(r: ScanResult, o: ResolvedOptions): void {
     );
   }
 
-  methodNote(o);
+  methodNote(o, r.usage);
 }
 
-function methodNote(o: ResolvedOptions): void {
+function methodNote(o: ResolvedOptions, usage?: UsageSummary): void {
   const modelNote = o.modelDetected ? " (from your Claude config)" : "";
   log.message(
     pc.dim(
@@ -98,6 +113,17 @@ function methodNote(o: ResolvedOptions): void {
         `Pricing ${o.model}${modelNote}, ${o.sessionsPerMonth} sessions/mo.`
     )
   );
+  if (usage === undefined) return;
+  log.message(pc.dim(usageNote(usage)));
+}
+
+/** One line explaining how much the "never used" claims are worth. */
+function usageNote(u: UsageSummary): string {
+  if (!u.consulted) return `Usage evidence: off${u.note ? ` (${u.note})` : ""}.`;
+  const window = `${u.sessions} session${u.sessions === 1 ? "" : "s"} over ${u.days} day${u.days === 1 ? "" : "s"}`;
+  return u.conclusive
+    ? `Usage evidence: read ${window} of local history — never uploaded.`
+    : `Usage evidence: only ${window} of history, too little to call anything unused yet.`;
 }
 
 export function printBeforeAfter(
@@ -114,6 +140,8 @@ export function printBeforeAfter(
   const body =
     `Context  ${fmt(before.baselineTokens)} ${arrow} ${pc.green(fmt(after.baselineTokens))}` +
     `   ${pc.green(`-${fmt(saved)} tok`)}\n` +
+    `Window   ${windowShare(before.baselineTokens, o.model)} ${arrow} ` +
+    `${pc.green(windowShare(after.baselineTokens, o.model))}\n` +
     `Cost     ${usd(beforeCost)} ${arrow} ${usd(afterCost)}/mo` +
     `   ${pc.green(`-${usd(beforeCost - afterCost)}`)}\n` +
     `Grade    ${gradeBadge(before.grade)} ${arrow} ${gradeBadge(after.grade)}`;
@@ -128,8 +156,7 @@ export function printBeforeAfter(
 // JSON serialization (no large blobs)
 // ---------------------------------------------------------------------------
 
-export function toJson(r: ScanResult) {
-  const { options } = r;
+export function printableScan(r: ScanResult, options: ResolvedOptions = r.options) {
   return {
     schemaVersion: JSON_SCHEMA_VERSION,
     tool: "ctxdiet",
@@ -138,8 +165,13 @@ export function toJson(r: ScanResult) {
     sessionsPerMonth: options.sessionsPerMonth,
     method: "GPT-4 tokenizer for files, size estimate for dirs — offline; not a billing figure",
     detectedAgents: r.detectedAgents,
+    usage: r.usage,
     grade: r.grade,
     baselineTokens: r.baselineTokens,
+    contextWindowTokens: CONTEXT_WINDOW[options.model] ?? 200_000,
+    baselineShareOfWindow: Number(
+      ((r.baselineTokens / (CONTEXT_WINDOW[options.model] ?? 200_000)) * 100).toFixed(2)
+    ),
     headlineSavingsTokens: r.headlineSavings,
     headlineSavingsUsdPerMonth: Number(
       monthlyCost(r.headlineSavings, options.sessionsPerMonth, options.model).toFixed(2)
@@ -157,6 +189,8 @@ export function toJson(r: ScanResult) {
       confidence: f.confidence,
       fixable: f.fixable,
       manualReview: f.manualReview ?? false,
+      autoApply: f.autoApply,
+      evidence: f.evidence ?? null,
     })),
   };
 }

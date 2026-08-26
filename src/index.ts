@@ -45,6 +45,8 @@ interface RawOptions {
   json?: boolean;
   dryRun?: boolean;
   yes?: boolean;
+  usage?: boolean;
+  includeUnused?: boolean;
 }
 
 /** Wrong invocation, distinct from a gate that legitimately failed. */
@@ -94,6 +96,7 @@ function resolveOptions(raw: RawOptions, modelFromCli: boolean): ResolvedOptions
   }
 
   return {
+    version: VERSION,
     path: path.resolve(raw.path ?? process.cwd()),
     home,
     sessionsPerMonth,
@@ -104,6 +107,8 @@ function resolveOptions(raw: RawOptions, modelFromCli: boolean): ResolvedOptions
     json: Boolean(raw.json),
     dryRun: Boolean(raw.dryRun),
     yes: Boolean(raw.yes),
+    usage: raw.usage !== false,
+    includeUnused: Boolean(raw.includeUnused),
   };
 }
 
@@ -116,7 +121,12 @@ function addCommonOptions(cmd: Command): Command {
     .option("--fail-on <grade>", "CI gate: exit non-zero if the grade is worse than this (A-F)")
     .option("--json", "machine-readable JSON output")
     .option("--dry-run", "show changes but write nothing")
-    .option("--yes", "apply all high-confidence fixes without prompting");
+    .option("--yes", "apply all high-confidence fixes without prompting")
+    .option("--no-usage", "skip local session history; judge config alone")
+    .option(
+      "--include-unused",
+      "let --yes also disable items the session history shows are never used"
+    );
 }
 
 const program = new Command();
@@ -179,6 +189,16 @@ program.action(async () => {
   }
   outro(pc.dim("Run `npx ctxdiet fix` to apply."));
 });
+
+program
+  .command("mcp")
+  .description("Run as an MCP server on stdio so your agent can audit its own context.")
+  .option("--path <dir>", "default directory to scan", process.cwd())
+  .option("--no-usage", "skip local session history")
+  .action(async (opts: RawOptions) => {
+    const { runMcpServer } = await import("./mcp.js");
+    await runMcpServer(resolveOptions({ ...opts, json: true }, false));
+  });
 
 const fix = program
   .command("fix")

@@ -2,6 +2,51 @@
 
 All notable changes to this project are documented here.
 
+## [0.5.0]
+
+Everything ctxdiet reported could be derived from config files alone — which
+meant the two most expensive categories, MCP servers and skills, could only ever
+be listed as "usage not confirmed". This release reads the evidence that was
+already on disk.
+
+### Added
+
+- **Usage evidence.** ctxdiet now reads local session transcripts
+  (`~/.claude/projects`) to prove which MCP servers, skills and subagents are
+  actually invoked. "Usage not confirmed — disable only if you know" becomes
+  "0 calls in 47 sessions over 62 days". Things you *do* use drop out of the
+  report entirely, so what remains is worth reading.
+
+  Local files only, nothing uploaded, and only tool *names* are read — never
+  prompts, arguments or file contents. `--no-usage` turns it off. Below 5
+  sessions or 7 days of history nothing is called unused, because a skill
+  installed yesterday is not waste.
+
+  The safety promise is unchanged: `--yes` still touches only provably-dead
+  waste. Rare use is not no use, so acting on a never-used item takes an
+  explicit `--include-unused`.
+
+- **MCP server mode.** `ctxdiet mcp` serves the scan over stdio, so your agent
+  can audit its own context when you ask why a session feels sluggish:
+
+      claude mcp add ctxdiet -- npx -y ctxdiet mcp
+
+  Two read-only tools — `ctxdiet_scan` and `ctxdiet_plan`. Writes are
+  deliberately not exposed: `fix` rewrites your memory and MCP config, which is
+  a decision to make with a summary in front of you, not one an agent takes
+  mid-conversation. Adds no dependencies.
+
+- **Context expressed as a share of the window.** "14,233 tokens" has no
+  denominator; "5.5% of a 200k window" is the same fact in a unit people
+  reason about. Shown in the header and the before/after block, and exposed as
+  `contextWindowTokens` / `baselineShareOfWindow` in `--json`.
+
+### Changed
+
+- Findings carry `autoApply` separately from `confidence`, so "we are sure this
+  is unused" and "this is safe to change unattended" stop being the same field.
+- 98 tests, up from 72, covering the usage engine and the MCP wire protocol.
+
 ## [0.4.0]
 
 The package had gone a while without an update. This release is mostly about

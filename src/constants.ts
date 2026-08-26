@@ -14,6 +14,26 @@ export const HEAVY_PATH_TOKEN_CAP = 5000;
 export const HEAVY_WALK_MAX_FILES = 2000;
 export const HEAVY_WALK_MAX_BYTES = 8 * 1024 * 1024;
 
+/**
+ * Context window per model, in tokens. Used only to express config cost as a
+ * share of the window — "7% of every session is gone before you type" lands in
+ * a way that "14,233 tokens" does not.
+ */
+export const CONTEXT_WINDOW: Record<string, number> = {
+  opus: 200_000,
+  sonnet: 200_000,
+  haiku: 200_000,
+};
+
+/** Usage evidence: how far back to look, and the caps that keep a scan fast. */
+export const USAGE_WINDOW_DAYS = 90;
+export const USAGE_MAX_FILES = 400;
+export const USAGE_MAX_BYTES = 64 * 1024 * 1024;
+
+/** Below these, an absence of calls is not evidence of anything. */
+export const USAGE_MIN_SESSIONS = 5;
+export const USAGE_MIN_DAYS = 7;
+
 /** Claude Code stops expanding @imports after this many hops; so do we. */
 export const MEMORY_IMPORT_MAX_DEPTH = 5;
 

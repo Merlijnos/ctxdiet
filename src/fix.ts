@@ -243,8 +243,12 @@ async function resolveOverlaps(overlaps: Overlap[], o: ResolvedOptions): Promise
 
 export async function runFix(o: ResolvedOptions): Promise<void> {
   const before = scan(o);
-  const high = before.findings.filter((f) => f.confidence === "high" && f.fixable && f.action);
-  const low = before.findings.filter((f) => f.confidence === "low" && f.fixable && f.action);
+  const actionable = before.findings.filter((f) => f.fixable && f.action);
+  // Provably-dead waste: what --yes has always been allowed to touch.
+  const high = actionable.filter((f) => f.autoApply);
+  // Everything else needs a person: an unconfirmed guess, or an evidence-backed
+  // "never used" that --include-unused opts into.
+  const low = actionable.filter((f) => !f.autoApply);
   const overlaps = before.overlaps;
 
   // --json is a scripting surface, not a preview. It used to report what it
@@ -255,7 +259,10 @@ export async function runFix(o: ResolvedOptions): Promise<void> {
   if (o.json) {
     const applied: string[] = [];
     const skipped: string[] = [];
-    for (const f of high) {
+    const batch = o.includeUnused
+      ? [...high, ...low.filter((f) => f.confidence === "high")]
+      : high;
+    for (const f of batch) {
       const change = f.action ? buildChange(f.action) : null;
       if (!change) continue;
       const target = changePaths(change);
@@ -315,17 +322,36 @@ export async function runFix(o: ResolvedOptions): Promise<void> {
 
   // ---- LOW-confidence: explicit confirm only; never under --yes ----
   if (low.length > 0) {
-    if (o.yes) {
-      log.warn(
-        `Skipped ${low.length} usage-unconfirmed item(s). --yes never touches these — ` +
-          `run \`ctxdiet fix\` without --yes to review.`
-      );
+    const proven = low.filter((f) => f.confidence === "high");
+
+    if (o.yes && o.includeUnused) {
+      // Opted in explicitly: act on what the history proves is unused, and
+      // still leave the unconfirmed guesses alone.
+      for (const f of proven) {
+        const change = buildChange(f.action!);
+        if (!change) continue;
+        log.step(summarize(f, change, o) + pc.dim(`  (${f.evidence ?? "never used"})`));
+        applyChange(change);
+        lowApplied += f.tokensPerSession;
+        log.success("  applied");
+      }
+      const rest = low.length - proven.length;
+      if (rest > 0) log.warn(`Left ${rest} usage-unconfirmed item(s) alone — no evidence either way.`);
+    } else if (o.yes) {
+      const hint = proven.length > 0
+        ? ` ${proven.length} of them are never used in your session history — add --include-unused to act on those.`
+        : "";
+      log.warn(`Skipped ${low.length} item(s) that need a person.${hint}`);
     } else if (interactive) {
       for (const f of low) {
         const change = buildChange(f.action!);
         if (!change) continue;
-        log.step(summarize(f, change, o) + pc.dim("  (usage unconfirmed)"));
-        if (await promptConfirm("Disable this? Only if you know it's unused.")) {
+        const why = f.evidence !== undefined ? `  (${f.evidence})` : "  (usage unconfirmed)";
+        log.step(summarize(f, change, o) + pc.dim(why));
+        const ask = f.evidence !== undefined
+          ? "Disable this? Your session history shows no use of it."
+          : "Disable this? Only if you know it's unused.";
+        if (await promptConfirm(ask)) {
           applyChange(change);
           lowApplied += f.tokensPerSession;
           log.success("  done");

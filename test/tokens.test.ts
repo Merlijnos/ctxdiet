@@ -41,3 +41,12 @@ test("cost scales with tokens, sessions and model", () => {
   assert.ok(monthlyCost(1_000_000, 1, "opus") > monthlyCost(1_000_000, 1, "haiku"));
   assert.equal(monthlyCost(0, 100, "opus"), 0);
 });
+
+test("window share is expressed against the model's context window", async () => {
+  const { windowShare } = await import("../src/report.js");
+  assert.equal(windowShare(20_000, "sonnet"), "10% of a 200k window");
+  assert.equal(windowShare(2_000, "sonnet"), "1.0% of a 200k window");
+  assert.equal(windowShare(0, "sonnet"), "0.0% of a 200k window");
+  // An unknown model must not produce NaN in the headline.
+  assert.equal(windowShare(20_000, "unknown"), "10% of a 200k window");
+});

@@ -245,6 +245,8 @@ const JUNK_NAMES = new Set([".DS_Store", "Thumbs.db"]);
 
 export interface DefRef {
   path: string;
+  /** Invocation name, for matching against session history. */
+  name: string;
   reason: string;
   /**
    * Tokens this definition injects into EVERY session — its front-matter
@@ -271,6 +273,13 @@ const cap = (n: number) => Math.min(n, DEFINITION_TOKEN_CAP);
  * Split a definition file into what every session pays for (front matter) and
  * what it only pays for on invocation (the body).
  */
+/** Front-matter `name` if present, else the file or folder name. */
+function definitionName(file: string, fallback: string): string {
+  const fm = parseFrontmatter(readFileSafe(file));
+  const name = fm.fields["name"];
+  return name !== undefined && name !== "" ? name : fallback;
+}
+
 function definitionTokens(file: string): { always: number; onDemand: number } {
   const fm = parseFrontmatter(readFileSafe(file));
   return {
@@ -367,7 +376,13 @@ function scanSkillRoot(root: string, dead: DefRef[], real: DefRef[], depth: numb
     const skillMd = path.join(full, "SKILL.md");
     if (isFile(skillMd)) {
       const { always, onDemand } = definitionTokens(skillMd);
-      real.push({ path: full, reason: "skill", tokens: always, onDemandTokens: onDemand });
+      real.push({
+        path: full,
+        name: definitionName(skillMd, e.name),
+        reason: "skill",
+        tokens: always,
+        onDemandTokens: onDemand,
+      });
       continue;
     }
     if (depth < DEFINITION_MAX_DEPTH && holdsSkill(full, depth + 1)) {
@@ -376,6 +391,7 @@ function scanSkillRoot(root: string, dead: DefRef[], real: DefRef[], depth: numb
     }
     dead.push({
       path: full,
+      name: e.name,
       reason: "skill folder with no SKILL.md (cannot load)",
       tokens: 0,
       onDemandTokens: cap(estimateTokensFromBytes(walkBytes(full))),
@@ -392,6 +408,7 @@ function classifyFile(
   if (JUNK_NAMES.has(name) || JUNK_RE.test(name)) {
     dead.push({
       path: full,
+      name,
       reason: "backup/temp artifact",
       tokens: 0,
       onDemandTokens: cap(estimateTokens(readFileSafe(full))),
@@ -402,11 +419,17 @@ function classifyFile(
 
   const content = readFileSafe(full);
   if (content.trim() === "") {
-    dead.push({ path: full, reason: "empty definition file", tokens: 0, onDemandTokens: 0 });
+    dead.push({ path: full, name, reason: "empty definition file", tokens: 0, onDemandTokens: 0 });
     return;
   }
   const { always, onDemand } = definitionTokens(full);
-  real.push({ path: full, reason: "definition", tokens: always, onDemandTokens: onDemand });
+  real.push({
+    path: full,
+    name: definitionName(full, name.replace(/\.md$/i, "")),
+    reason: "definition",
+    tokens: always,
+    onDemandTokens: onDemand,
+  });
 }
 
 /** "3 backup/temp artifacts, 1 empty definition file" — grouped reasons. */

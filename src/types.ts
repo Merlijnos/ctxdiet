@@ -6,6 +6,8 @@ export type Category = "Memory" | "Ignore" | "MCP" | "Definitions";
 export type Confidence = "high" | "low";
 
 export interface ResolvedOptions {
+  /** ctxdiet's own version, for the MCP handshake. */
+  version: string;
   /** Project directory being scanned. */
   path: string;
   /** Home directory holding global agent config (~/.claude, ~/.codex, …). */
@@ -18,6 +20,10 @@ export interface ResolvedOptions {
   maxTokens: number | null;
   /** CI gate: exit non-zero if the grade is worse than this. null = off. */
   failOn: string | null;
+  /** Read local session history to prove what is actually used. */
+  usage: boolean;
+  /** Let `--yes` also act on evidence-backed unused items. */
+  includeUnused: boolean;
   json: boolean;
   dryRun: boolean;
   yes: boolean;
@@ -44,8 +50,26 @@ export interface Finding {
   confidence: Confidence;
   /** Whether `fix` can act on it at all (false = pure manual review note). */
   fixable: boolean;
+  /**
+   * Safe for `--yes` on its own. True only for provably-dead waste. An
+   * evidence-backed "unused for 62 days" can be high confidence and still
+   * require `--include-unused`: rare use is not no use, and disabling an MCP
+   * server someone needs once a month is a worse outcome than leaving it.
+   */
+  autoApply: boolean;
+  /** What the session history showed, when it was consulted. */
+  evidence?: string;
   manualReview?: boolean;
   action?: FixAction;
+}
+
+/** Reportable summary of the session-history scan. */
+export interface UsageSummary {
+  consulted: boolean;
+  sessions: number;
+  days: number;
+  conclusive: boolean;
+  note?: string;
 }
 
 export interface DetectedAgent {
@@ -64,6 +88,8 @@ export interface Overlap {
 
 export interface ScanResult {
   options: ResolvedOptions;
+  /** How the usage evidence was gathered, for reporting. */
+  usage: UsageSummary;
   detectedAgents: DetectedAgent[];
   findings: Finding[];
   overlaps: Overlap[];
