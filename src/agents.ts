@@ -50,9 +50,73 @@ export const AGENTS: AgentDef[] = [
     ],
   },
   {
+    id: "amp",
+    label: "Amp",
+    memoryFiles: (o) => uniq([P(o, "AGENT.md"), H(o, ".config", "amp", "AGENT.md")]),
+    mcpFiles: (o) => uniq([H(o, ".config", "amp", "settings.json")]),
+    detectSignals: (o) => [P(o, "AGENT.md"), H(o, ".config", "amp")],
+  },
+  {
+    id: "cline",
+    label: "Cline",
+    memoryFiles: (o) =>
+      uniq([P(o, ".clinerules"), ...walkFiles(P(o, ".clinerules"), [".md"])]),
+    ignoreFile: ".clineignore",
+    mcpFiles: (o) => uniq([P(o, ".cline", "mcp.json")]),
+    detectSignals: (o) => [P(o, ".clinerules"), P(o, ".clineignore")],
+  },
+  {
+    id: "roo",
+    label: "Roo Code",
+    memoryFiles: (o) =>
+      uniq([P(o, ".roorules"), ...walkFiles(P(o, ".roo", "rules"), [".md"])]),
+    ignoreFile: ".rooignore",
+    mcpFiles: (o) => uniq([P(o, ".roo", "mcp.json")]),
+    detectSignals: (o) => [P(o, ".roorules"), P(o, ".roo"), P(o, ".rooignore")],
+  },
+  {
+    id: "continue",
+    label: "Continue",
+    memoryFiles: (o) => walkFiles(P(o, ".continue", "rules"), [".md"]),
+    mcpFiles: (o) => uniq([P(o, ".continue", "mcp.json")]),
+    detectSignals: (o) => [P(o, ".continue")],
+  },
+  {
+    id: "junie",
+    label: "JetBrains Junie",
+    memoryFiles: (o) => uniq([P(o, ".junie", "guidelines.md")]),
+    mcpFiles: () => [],
+    detectSignals: (o) => [P(o, ".junie")],
+  },
+  {
+    id: "zed",
+    label: "Zed",
+    memoryFiles: (o) => uniq([P(o, ".rules")]),
+    mcpFiles: () => [],
+    detectSignals: (o) => [P(o, ".rules")],
+  },
+  {
+    id: "aider",
+    label: "Aider",
+    memoryFiles: (o) => uniq([P(o, "CONVENTIONS.md")]),
+    ignoreFile: ".aiderignore",
+    mcpFiles: () => [],
+    detectSignals: (o) => [P(o, "CONVENTIONS.md"), P(o, ".aider.conf.yml"), P(o, ".aiderignore")],
+  },
+  {
+    id: "amazonq",
+    label: "Amazon Q Developer",
+    memoryFiles: (o) => walkFiles(P(o, ".amazonq", "rules"), [".md"]),
+    mcpFiles: (o) => uniq([P(o, ".amazonq", "mcp.json"), H(o, ".aws", "amazonq", "mcp.json")]),
+    detectSignals: (o) => [P(o, ".amazonq")],
+  },
+  {
     id: "codex",
     label: "Codex / AGENTS.md",
-    memoryFiles: (o) => uniq([P(o, "AGENTS.md"), H(o, ".codex", "AGENTS.md")]),
+    // AGENTS.md is the cross-tool convention now, and it nests: the runtime
+    // reads the one nearest the file being edited, so a repo can carry several.
+    memoryFiles: (o) =>
+      uniq([P(o, "AGENTS.md"), H(o, ".codex", "AGENTS.md"), ...walkFiles(o.path, ["AGENTS.md"])]),
     mcpFiles: () => [],
     detectSignals: (o) => [P(o, "AGENTS.md"), H(o, ".codex")],
   },
@@ -60,7 +124,11 @@ export const AGENTS: AgentDef[] = [
     id: "cursor",
     label: "Cursor",
     memoryFiles: (o) =>
-      uniq([P(o, ".cursorrules"), ...walkFiles(P(o, ".cursor", "rules"), [".mdc", ".md"])]),
+      uniq([
+        P(o, ".cursorrules"),
+        ...walkFiles(P(o, ".cursor", "rules"), [".mdc", ".md"]),
+        ...walkFiles(H(o, ".cursor", "rules"), [".mdc", ".md"]),
+      ]),
     ignoreFile: ".cursorignore",
     mcpFiles: (o) => uniq([P(o, ".cursor", "mcp.json"), H(o, ".cursor", "mcp.json")]),
     detectSignals: (o) => [P(o, ".cursorrules"), P(o, ".cursor"), P(o, ".cursorignore")],
@@ -77,9 +145,13 @@ export const AGENTS: AgentDef[] = [
     id: "windsurf",
     label: "Windsurf",
     memoryFiles: (o) =>
-      uniq([P(o, ".windsurfrules"), ...walkFiles(P(o, ".windsurf", "rules"), [".md"])]),
+      uniq([
+        P(o, ".windsurfrules"),
+        ...walkFiles(P(o, ".windsurf", "rules"), [".md"]),
+        ...walkFiles(H(o, ".codeium", "windsurf", "memories"), [".md"]),
+      ]),
     ignoreFile: ".codeiumignore",
-    mcpFiles: () => [],
+    mcpFiles: (o) => uniq([H(o, ".codeium", "windsurf", "mcp_config.json")]),
     detectSignals: (o) => [P(o, ".windsurfrules"), P(o, ".windsurf")],
   },
   {
@@ -90,7 +162,7 @@ export const AGENTS: AgentDef[] = [
         P(o, ".github", "copilot-instructions.md"),
         ...walkFiles(P(o, ".github", "instructions"), [".instructions.md", ".md"]),
       ]),
-    mcpFiles: (o) => [P(o, ".vscode", "mcp.json")],
+    mcpFiles: (o) => uniq([P(o, ".vscode", "mcp.json"), P(o, ".github", "mcp.json")]),
     detectSignals: (o) => [
       P(o, ".github", "copilot-instructions.md"),
       P(o, ".github", "instructions"),

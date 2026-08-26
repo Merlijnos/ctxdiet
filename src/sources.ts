@@ -90,9 +90,16 @@ export function detectModel(home: string): Model | null {
   return null;
 }
 
-/** Recursively list files under `dir` whose name ends with one of `exts`. */
+/**
+ * Recursively list files under `dir` whose name ends with one of `exts`.
+ *
+ * Prunes the heavy directories on the way down. Without that, looking for a
+ * nested AGENTS.md walks straight into node_modules and reports a dependency's
+ * instruction file as part of the user's context.
+ */
 export function walkFiles(dir: string, exts: string[]): string[] {
   if (!isDir(dir)) return [];
+  const skip = new Set<string>(HEAVY_DIRS);
   const out: string[] = [];
   const stack = [dir];
   while (stack.length && out.length < HEAVY_WALK_MAX_FILES) {
@@ -106,6 +113,7 @@ export function walkFiles(dir: string, exts: string[]): string[] {
     for (const e of entries) {
       const full = path.join(cur, e.name);
       if (e.isDirectory()) {
+        if (skip.has(e.name) || e.name === ".git") continue;
         stack.push(full);
       } else if (e.isFile() && exts.some((x) => e.name.endsWith(x))) {
         out.push(full);
@@ -274,11 +282,17 @@ function definitionTokens(file: string): { always: number; onDemand: number } {
 export function scanDefinitions(o: ResolvedOptions): DefInventory {
   const dead: DefRef[] = [];
   const real: DefRef[] = [];
-  const roots: Array<["agents" | "commands" | "skills", string]> = [
-    ["agents", path.join(o.home, ".claude", "agents")],
-    ["commands", path.join(o.home, ".claude", "commands")],
-    ["skills", path.join(o.home, ".claude", "skills")],
-  ];
+  // Definitions live at both scopes and both are loaded. Only the home dir was
+  // ever scanned, so a repo checking its subagents and slash commands into
+  // .claude/ had that context counted as free.
+  const bases = uniq([path.join(o.home, ".claude"), path.join(o.path, ".claude")]);
+  const roots: Array<["agents" | "commands" | "skills", string]> = bases.flatMap(
+    (base) => [
+      ["agents", path.join(base, "agents")],
+      ["commands", path.join(base, "commands")],
+      ["skills", path.join(base, "skills")],
+    ] as Array<["agents" | "commands" | "skills", string]>
+  );
 
   for (const [kind, root] of roots) {
     if (!isDir(root)) continue;
@@ -405,8 +419,15 @@ export function summarizeReasons(refs: DefRef[]): string {
     .join(", ");
 }
 
+/**
+ * Where an archived definition goes. Archives stay inside the .claude dir the
+ * file came from, so a project's definitions are never quietly relocated into
+ * the user's home directory.
+ */
 export function archivePathFor(p: string, home: string): string {
-  const base = path.join(home, ".claude");
-  const rel = p.startsWith(base) ? path.relative(base, p) : path.basename(p);
-  return path.join(home, ".claude", ".ctxdiet-archive", rel);
+  const marker = `${path.sep}.claude${path.sep}`;
+  const at = p.lastIndexOf(marker);
+  const base = at >= 0 ? p.slice(0, at + marker.length - 1) : path.join(home, ".claude");
+  const rel = p.startsWith(base + path.sep) ? path.relative(base, p) : path.basename(p);
+  return path.join(base, ".ctxdiet-archive", rel);
 }
